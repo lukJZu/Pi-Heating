@@ -1,8 +1,9 @@
+import os
 import RPi.GPIO as GPIO
 from datetime import datetime
 import pandas as pd
-#from dateutil.tz import tzlocal
 import iso8601
+from pathlib import Path
 
 GPIO.setmode(GPIO.BCM)
 
@@ -14,7 +15,7 @@ GPIO.setup(pinNo, GPIO.OUT)
 timeNow = datetime.now().astimezone()
 
 #read in the csv as pandas dataframe
-scheduleDF = pd.read_csv('scripts/hotWater/schedule.csv')
+scheduleDF = pd.read_csv(os.path.join(Path.home(), 'data', 'hotWaterSchedule.csv'))
 scheduleDF['time'] = scheduleDF['time'].apply(iso8601.parse_date)
 
 #scheduleDF['time'] = pd.to_datetime(scheduleDF['time'])

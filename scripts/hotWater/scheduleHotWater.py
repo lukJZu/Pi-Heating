@@ -2,19 +2,21 @@ import os, sys, pytz
 from operator import itemgetter
 from datetime import date, time, datetime, timedelta
 from dateutil.tz import tzlocal
+from pathlib import Path
 import pandas as pd
 import iso8601
 
 #read in the csv file that contains the updated agile rates into dataframe
-ratesDF = pd.read_csv('scripts/agileRates.csv')
+ratesDF = pd.read_csv(os.path.join(Path.home(), 'data', 'agileRates.csv'))
 ratesDF['valid_to'] = ratesDF['valid_to'].apply(iso8601.parse_date)
 ratesDF['valid_from'] = ratesDF['valid_from'].apply(iso8601.parse_date)
 #ratesDF['valid_to']   = pd.to_datetime(ratesDF['valid_to'], utc = True)
 #ratesDF['valid_from'] = pd.to_datetime(ratesDF['valid_from'], utc = True)
 
 #read in any existing schedule for hot water into a dataframe
-if os.path.isfile('scripts/hotWater/schedule.csv'):
-	scheduleDF = pd.read_csv('scripts/hotWater/schedule.csv', header = 0)
+scheduleFile = os.path.join(Path.home(), 'data', 'hotWaterSchedule.csv')
+if os.path.isfile(scheduleFile):
+	scheduleDF = pd.read_csv(scheduleFile, header = 0)
 else:
 	scheduleDF = pd.DataFrame(columns=['time', 'state'])
 #timezone is system timezone
@@ -61,7 +63,10 @@ else:
 	skipWhile = False
 
 scheduleDF = pd.concat([scheduleDF, negDF], ignore_index = True)
-scheduleDF.time = scheduleDF.time.dt.tz_convert(tzlocal())
+try:
+	scheduleDF.time = scheduleDF.time.dt.tz_convert(tzlocal())
+except AttributeError:
+	pass
 
 #calculate the remaining minutes to heat
 heatWaterMinAfterNeg = heatWaterMin - onTime.seconds / 60
@@ -149,4 +154,4 @@ scheduleDF = scheduleDF.drop(scheduleDF[scheduleDF.duplicated()].index)
 
 scheduleDF['state'] = scheduleDF['state'].astype(bool)
 scheduleDF = scheduleDF.sort_values(by = 'time')
-scheduleDF.to_csv('scripts/hotWater/schedule.csv', index=False)
+scheduleDF.to_csv(scheduleFile, index=False)

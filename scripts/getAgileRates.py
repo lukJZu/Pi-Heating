@@ -2,6 +2,7 @@ import sys, os, json, datetime
 import requests
 from urllib.parse import urljoin
 import pandas as pd
+from pathlib import Path
 
 baseURL = "https://api.octopus.energy"
 API_KEY = "sk_live_8FpzB32H5PszTPusBxgU5Ppq"
@@ -19,7 +20,7 @@ df['valid_from'] = pd.to_datetime(df['valid_from'], utc = True, format = "%Y-%m-
 df['valid_to']   = pd.to_datetime(df['valid_to'],   utc = True, format = "%Y-%m-%dT%H:%M:%SZ")
 df = df.sort_values(by='valid_from')
 
-df.to_csv('scripts/agileRates.csv', index=False)
+df.to_csv(os.path.join(Path.home(), 'data', 'agileRates.csv'), index=False)
 
 #with open('hotWater/agileRates.csv', 'w') as f:
 #    for rate in rates:

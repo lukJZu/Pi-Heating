@@ -1,4 +1,4 @@
-import sys
+import os, sys, pathlib
 import time, datetime, csv
 import RPi.GPIO as GPIO
 
@@ -9,13 +9,18 @@ GPIO.setup(23, GPIO.IN)
 
 prevState = -1
 prevTime = datetime.datetime.now()
+homeDir = str(pathlib.Path.home())
+csvFile = os.path.join(homeDir, 'data', 'boilerState.csv')
+
 try:
 	while True:
 		if not GPIO.input(17):
 			state = GPIO.input(23)
+		else:
+			state = GPIO.HIGH
 	
 		if state != prevState or datetime.datetime.now() - prevTime > datetime.timedelta(hours = 12):
-			with open('scripts/boilerState.csv', 'a') as f:
+			with open(csvFile, 'a') as f:
 				timeNow = datetime.datetime.now().replace(microsecond = 0)
 				f.write(f'{timeNow.isoformat()},{not state}\n')
 			prevTime = datetime.datetime.now()
