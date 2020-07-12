@@ -10,8 +10,6 @@ import iso8601
 ratesDF = pd.read_csv(os.path.join(Path.home(), 'data', 'agileRates.csv'))
 ratesDF['valid_to'] = ratesDF['valid_to'].apply(iso8601.parse_date)
 ratesDF['valid_from'] = ratesDF['valid_from'].apply(iso8601.parse_date)
-#ratesDF['valid_to']   = pd.to_datetime(ratesDF['valid_to'], utc = True)
-#ratesDF['valid_from'] = pd.to_datetime(ratesDF['valid_from'], utc = True)
 
 #read in any existing schedule for hot water into a dataframe
 scheduleFile = os.path.join(Path.home(), 'data', 'hotWaterSchedule.csv')
@@ -20,11 +18,10 @@ if os.path.isfile(scheduleFile):
 else:
 	scheduleDF = pd.DataFrame(columns=['time', 'state'])
 #timezone is system timezone
-#scheduleDF['time'] = pd.to_datetime(scheduleDF['time'])
 scheduleDF['time'] = scheduleDF['time'].apply(iso8601.parse_date)
 
-#remove any rows which has passed
-scheduleDF = scheduleDF.drop(scheduleDF[scheduleDF['time'] < datetime.now().astimezone()].index)
+#remove any rows which are older than today
+scheduleDF = scheduleDF.drop(scheduleDF[scheduleDF['time'].dt.date < date.today()].index)
 
 heatWaterMin = 50	#how long is the typical heat up
 fullHeating = 100	#how long is the full heat up
@@ -34,14 +31,13 @@ kWUse = 9		#what is the power rating of the boiler
 prevRate = 0
 negDF = pd.DataFrame(columns = ['time', 'state'])
 for tup in ratesDF.itertuples():
-
+	#skipping any rows which are older than now
 	if tup.valid_from < datetime.now().astimezone():
 		prevRate = tup.rate
 		continue
-
+	#iterating over the timeframes
 	if tup.rate < 0:
 		startTime = tup.valid_from
-
 		negDF.loc[len(negDF)] = [startTime - timedelta(minutes = 1, seconds = 10), 1]
 	elif tup.rate > 0 and prevRate < 0:
 		negDF.loc[len(negDF)] = [tup.valid_from-timedelta(minutes = 1, seconds=10), 0]
@@ -56,7 +52,7 @@ for no in range(len(negDF.index)):
 	elif not negDF.iloc[no,1] and onState and no > 0:
 		onTime += negDF.iloc[no, 0] - negDF.iloc[no-1, 0]
 		onState = 0
-
+#variable to skip the while loop if heating time has exceeded
 if onTime.seconds >= fullHeating * 60:
 	skipWhile = True
 else:
@@ -67,6 +63,15 @@ try:
 	scheduleDF.time = scheduleDF.time.dt.tz_convert(tzlocal())
 except AttributeError:
 	pass
+
+#calculating heat time today
+#todayDF = scheduleDF[scheduleDF['time'] < datetime.now().astimezone()]
+#state, secondsOn = 0, 0
+#for i in range(todayDF.shape[0]-1):
+#	#if todayDF.iloc[i, 1]:
+#	#	state = 1
+#	if not todayDF.iloc[i, 1] and state:
+#		secondsOn += (todayDF.iloc[i, 0] - todayDF.iloc[i-1, 0]).seconds
 
 #calculate the remaining minutes to heat
 heatWaterMinAfterNeg = heatWaterMin - onTime.seconds / 60
