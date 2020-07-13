@@ -10,6 +10,7 @@ GPIO.setmode(GPIO.BCM)
 pinNo = 17
 
 GPIO.setup(pinNo, GPIO.OUT)
+GPIO.output(17, GPIO.HIGH)
 
 boostJSON = os.path.join(Path.home(), 'data', 'boostStates.json')
 scheduleCSV = os.path.join(Path.home(), 'data', 'hotWaterSchedule.csv')
@@ -67,7 +68,7 @@ def turnOffBoost():
 		json.dump(boostStates, f)
 
 try:
-	# prevState = False
+	prevState = False
 	while True:
 		#get the current time
 		timeNow = datetime.now().astimezone()
@@ -93,12 +94,12 @@ try:
 
 		#check if previous state is the same as current state
 		#if not, then set the state
-		# if prevState != state:
-		GPIO.output(pinNo, not state)
+		if prevState != state:
+			GPIO.output(pinNo, not state)
 
 		#pause for x seconds
 		time.sleep(secondsInterval)
-		# prevState = state
+		prevState = state
 
 
 except KeyboardInterrupt:

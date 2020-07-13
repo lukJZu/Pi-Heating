@@ -116,8 +116,8 @@ while currentTime.date() < tomorrow + timedelta(days = 1) and not skipWhile:
 		startTime, endTime, currentRate = nextRow.iat[0, 0], nextRow.iat[0, 1], nextRow.iat[0, 2]
 		cTime = startTime
 
-	secs = (endTime - cTime).total_seconds()
-	cost += secs * kWUse / 3600 * currentRate
+#	secs = (endTime - cTime).total_seconds()
+	cost += heatTimeLeft * kWUse / 3600 * currentRate
 	costs.append(cost)
 	times.append(currentTime)
 	currentTime = currentTime + timedelta(minutes=10)
