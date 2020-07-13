@@ -1,7 +1,6 @@
 import os, sys, time, json, csv
 import RPi.GPIO as GPIO
 from datetime import datetime
-# import pandas as pd
 import iso8601
 from pathlib import Path
 

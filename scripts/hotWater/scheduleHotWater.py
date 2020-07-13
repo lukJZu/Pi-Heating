@@ -18,7 +18,6 @@ if os.path.isfile(scheduleFile):
 else:
 	scheduleDF = pd.DataFrame(columns=['time', 'state'])
 #timezone is system timezone
-#scheduleDF['time'] = pd.to_datetime(scheduleDF['time'])
 scheduleDF['time'] = scheduleDF['time'].apply(iso8601.parse_date)
 
 #remove any rows which are older than today
@@ -116,11 +115,12 @@ while currentTime.date() < tomorrow + timedelta(days = 1) and not skipWhile:
 		startTime, endTime, currentRate = nextRow.iat[0, 0], nextRow.iat[0, 1], nextRow.iat[0, 2]
 		cTime = startTime
 
-#	secs = (endTime - cTime).total_seconds()
+	# secs = (endTime - cTime).total_seconds()
 	cost += heatTimeLeft * kWUse / 3600 * currentRate
 	costs.append(cost)
 	times.append(currentTime)
 	currentTime = currentTime + timedelta(minutes=10)
+
 
 if not skipWhile:
 	if costs:
