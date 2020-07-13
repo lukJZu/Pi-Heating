@@ -15,11 +15,6 @@ csvFile = os.path.join(homeDir, 'data', 'boilerState.csv')
 
 try:
 	while True:
-#		if not GPIO.input(17):
-#			state = GPIO.input(23)
-#		else:
-#			state = GPIO.HIGH
-		
 		#storing state of the hotWater, heating and boiler
 		hotWaterState = not GPIO.input(17)
 		heatingState  = bool(GPIO.input(18))
@@ -34,5 +29,7 @@ try:
 		prevState = boilerState
 
 		time.sleep(30)
+
+
 except KeyboardInterrupt:
 	sys.exit()
