@@ -1,4 +1,4 @@
-import os, sys, pytz
+import os, sys, pytz, json
 from operator import itemgetter
 from datetime import date, time, datetime, timedelta
 from dateutil.tz import tzlocal
@@ -13,19 +13,25 @@ ratesDF['valid_from'] = ratesDF['valid_from'].apply(iso8601.parse_date)
 
 #read in any existing schedule for hot water into a dataframe
 scheduleFile = os.path.join(Path.home(), 'data', 'hotWaterSchedule.csv')
-if os.path.isfile(scheduleFile):
+try:
 	scheduleDF = pd.read_csv(scheduleFile, header = 0)
-else:
+except:
 	scheduleDF = pd.DataFrame(columns=['time', 'state'])
+		
 #timezone is system timezone
 scheduleDF['time'] = scheduleDF['time'].apply(iso8601.parse_date)
 
 #remove any rows which are older than today
-scheduleDF = scheduleDF.drop(scheduleDF[scheduleDF['time'].dt.date < date.today()].index)
+if scheduleDF.shape[0]:
+	scheduleDF = scheduleDF.drop(scheduleDF[scheduleDF['time'].dt.date < date.today()].index)
 
-heatWaterMin = 45	#how long is the typical heat up
-fullHeating = 100	#how long is the full heat up
-kWUse = 9		#what is the power rating of the boiler
+#get the past month avg from states.json
+with open(os.path.join(Path.home(), 'data', 'states.json'), 'r') as f:
+	states = json.load(f)
+heatWaterMin = states['hotWater']['pastMonthAvg']+5	#how long is the typical heat up
+# heatWaterMin = 50	#how long is the typical heat up
+fullHeating = 100									#how long is the full heat up
+kWUse = 9											#what is the power rating of the boiler
 
 #loop over to find negative rates
 prevRate = 0
@@ -63,15 +69,6 @@ try:
 	scheduleDF.time = scheduleDF.time.dt.tz_convert(tzlocal())
 except AttributeError:
 	pass
-
-#calculating heat time today
-#todayDF = scheduleDF[scheduleDF['time'] < datetime.now().astimezone()]
-#state, secondsOn = 0, 0
-#for i in range(todayDF.shape[0]-1):
-#	#if todayDF.iloc[i, 1]:
-#	#	state = 1
-#	if not todayDF.iloc[i, 1] and state:
-#		secondsOn += (todayDF.iloc[i, 0] - todayDF.iloc[i-1, 0]).seconds
 
 #calculate the remaining minutes to heat
 heatWaterMinAfterNeg = heatWaterMin - onTime.seconds / 60
@@ -115,7 +112,6 @@ while currentTime.date() < tomorrow + timedelta(days = 1) and not skipWhile:
 		startTime, endTime, currentRate = nextRow.iat[0, 0], nextRow.iat[0, 1], nextRow.iat[0, 2]
 		cTime = startTime
 
-	# secs = (endTime - cTime).total_seconds()
 	cost += heatTimeLeft * kWUse / 3600 * currentRate
 	costs.append(cost)
 	times.append(currentTime)
@@ -124,10 +120,9 @@ while currentTime.date() < tomorrow + timedelta(days = 1) and not skipWhile:
 
 if not skipWhile:
 	if costs:
-		# print(type(costs))
-		costs.reverse()
-		idx = len(costs) - costs.index(min(costs)) - 1
-		# val, idx = min((val, idx) for (idx, val) in enumerate(costs))
+		# costs.reverse()
+		# idx = len(costs) - costs.index(min(costs)) - 1
+		val, idx = min((val, idx) for (idx, val) in enumerate(costs))
 		timeOn = times[idx]
 
 		#checking for duplicates
