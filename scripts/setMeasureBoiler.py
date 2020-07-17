@@ -46,18 +46,18 @@ def condenseTimes(timeStates:list):
 	return condensedTimes
 
 
-def measureBoiler(prevState):
+def measureBoiler(prevMeasuredStates):
 	while True:
 		#storing state of the hotWater, heating and boiler
 		hotWaterState = not GPIO.input(hotWaterPin)
 		heatingState  = bool(GPIO.input(heatingPin))
 		boilerState   = not GPIO.input(boilerStatePin)
 	
-		if boilerState != prevState:# or datetime.datetime.now() - prevTime > datetime.timedelta(hours = 12):
+		states = [hotWaterState, heatingState, boilerState]
+		if states != prevMeasuredStates:
 			with open(csvFile, 'a') as f:
 				timeNow = datetime.now().replace(microsecond = 0).astimezone()
-				f.write(f'{timeNow.isoformat()},{hotWaterState},{heatingState},{boilerState}\n')
-			# prevTime = datetime.datetime.now()
+				f.write(f'{timeNow.isoformat()},{",".join(states)}\n')
 
 		return boilerState
 
@@ -135,13 +135,13 @@ def setHotWaterHeating(prevWaterState, prevHeatingState):
 
 
 if __name__ == "__main__":
-	prevBoilerState = -1
+	prevMeasuredStates = [-1, -1, -1]
 	prevHotWaterState = False
 	prevHeatingState = False
 	try:
 		while True:
 			prevHotWaterState, prevHeatingState = setHotWaterHeating(prevHotWaterState, prevHeatingState)
-			prevBoilerState = measureBoiler(prevBoilerState)
+			prevBoilerState = measureBoiler(prevMeasuredStates)
 			time.sleep(secondsInterval)
 	except KeyboardInterrupt:
 		sys.exit()
