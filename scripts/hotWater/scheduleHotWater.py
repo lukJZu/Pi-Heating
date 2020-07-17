@@ -23,7 +23,7 @@ scheduleDF['time'] = scheduleDF['time'].apply(iso8601.parse_date)
 #remove any rows which are older than today
 scheduleDF = scheduleDF.drop(scheduleDF[scheduleDF['time'].dt.date < date.today()].index)
 
-heatWaterMin = 50	#how long is the typical heat up
+heatWaterMin = 45	#how long is the typical heat up
 fullHeating = 100	#how long is the full heat up
 kWUse = 9		#what is the power rating of the boiler
 
@@ -77,7 +77,7 @@ except AttributeError:
 heatWaterMinAfterNeg = heatWaterMin - onTime.seconds / 60
 
 #set starting time to midnight tonight local time
-tomorrow = date.today() + timedelta(days = 1)
+tomorrow = date.today()# + timedelta(days = 1)
 currentTime = datetime.combine(tomorrow, time()).replace(tzinfo = tzlocal())
 
 costs, times = [], []
@@ -124,7 +124,10 @@ while currentTime.date() < tomorrow + timedelta(days = 1) and not skipWhile:
 
 if not skipWhile:
 	if costs:
-		val, idx = min((val, idx) for (idx, val) in enumerate(costs))
+		# print(type(costs))
+		costs.reverse()
+		idx = len(costs) - costs.index(min(costs)) - 1
+		# val, idx = min((val, idx) for (idx, val) in enumerate(costs))
 		timeOn = times[idx]
 
 		#checking for duplicates

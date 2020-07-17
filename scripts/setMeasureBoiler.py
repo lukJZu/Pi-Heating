@@ -14,6 +14,9 @@ boilerStatePin 	= 23
 GPIO.setup(hotWaterPin, GPIO.OUT)
 GPIO.setup(heatingPin, GPIO.OUT)
 GPIO.setup(boilerStatePin, GPIO.IN)
+#turn off pins after reboot
+GPIO.output(hotWaterPin, GPIO.HIGH)
+GPIO.output(heatingPin, GPIO.LOW)
 
 csvFile = os.path.join(Path.home(), 'data', 'boilerState.csv')
 boostJSON = os.path.join(Path.home(), 'data', 'states.json')
@@ -43,23 +46,23 @@ def condenseTimes(timeStates:list):
 	return condensedTimes
 
 
-def measureBoiler(prevState):
+def measureBoiler(prevMeasuredStates):
 	while True:
 		#storing state of the hotWater, heating and boiler
 		hotWaterState = not GPIO.input(hotWaterPin)
 		heatingState  = bool(GPIO.input(heatingPin))
 		boilerState   = not GPIO.input(boilerStatePin)
 	
-		if boilerState != prevState:# or datetime.datetime.now() - prevTime > datetime.timedelta(hours = 12):
+		states = [hotWaterState, heatingState, boilerState]
+		if states != prevMeasuredStates:
 			with open(csvFile, 'a') as f:
 				timeNow = datetime.now().replace(microsecond = 0).astimezone()
-				f.write(f'{timeNow.isoformat()},{hotWaterState},{heatingState},{boilerState}\n')
-			# prevTime = datetime.datetime.now()
+				f.write(f'{timeNow.isoformat()},{",".join(states)}\n')
 
 		return boilerState
 
 
-def setHotWater(prevState):
+def setHotWaterHeating(prevWaterState, prevHeatingState):
 
 	def checkAgainstSchedule():
 		#open the schedule csv file
@@ -78,14 +81,14 @@ def setHotWater(prevState):
 		return state
 
 	#getting the boost states from the json file
-	def checkHotWaterStates():
+	def checkJSONStates():
 		with open(boostJSON, 'r') as f:
 			hotWaterStates = json.load(f)
 		return hotWaterStates
 
 	#update the boost json file by setting boost to off
 	def turnOffBoost():
-		hotWaterStates = checkHotWaterStates()
+		hotWaterStates = checkJSONStates()
 		hotWaterStates['hotWater']['boost'] = False
 		with open(boostJSON, 'w') as f:
 			json.dump(hotWaterStates, f)
@@ -95,43 +98,50 @@ def setHotWater(prevState):
 	timeNow = datetime.now().astimezone()
 
 	#get the boostState
-	hotWaterStates = checkHotWaterStates()['hotWater']
-	cState = hotWaterStates['state']
-	bState = hotWaterStates['boost']
+	jsonState = checkJSONStates()
+	cState = jsonState['hotWater']['state']
+	bState = jsonState['hotWater']['boost']
 	#if boost is on
 	if bState:
 		#get the end time
-		endTime = datetime.fromisoformat(hotWaterStates['endTime'])
+		endTime = datetime.fromisoformat(jsonState['hotWater']['endTime'])
 		#if end time hasn't passed, then set state as on
 		if timeNow < endTime:
-			state = True
+			setHotWaterStat = True
 		#if end time has passed, turn boost off by updating json, 
 		#then set state according to schedule
 		elif endTime < timeNow:
 			turnOffBoost()
-			state = checkAgainstSchedule()
+			setHotWaterStat = checkAgainstSchedule()
 	#if boost is off, set state according to schedule
 	elif not cState:
-		state = False
+		setHotWaterStat = False
 	else:
-		state = checkAgainstSchedule()
+		setHotWaterStat = checkAgainstSchedule()
+
+	#read heating state
+	setHeatingState = jsonState['heating']['state']
 
 	#check if previous state is the same as current state
 	#if not, then set the state
-	if prevState != state:
-		GPIO.output(hotWaterPin, not state)
+	if prevWaterState != setHotWaterStat:
+		GPIO.output(hotWaterPin, not setHotWaterStat)
+	if prevHeatingState != setHeatingState:
+		GPIO.output(heatingPin, setHeatingState)
 
-	return state
+
+	return setHotWaterStat, setHeatingState
 
 
 
 if __name__ == "__main__":
-	prevBoilerState = -1
+	prevMeasuredStates = [-1, -1, -1]
 	prevHotWaterState = False
+	prevHeatingState = False
 	try:
 		while True:
-			prevHotWaterState = setHotWater(prevHotWaterState)
-			prevBoilerState = measureBoiler(prevBoilerState)
+			prevHotWaterState, prevHeatingState = setHotWaterHeating(prevHotWaterState, prevHeatingState)
+			prevBoilerState = measureBoiler(prevMeasuredStates)
 			time.sleep(secondsInterval)
 	except KeyboardInterrupt:
 		sys.exit()
