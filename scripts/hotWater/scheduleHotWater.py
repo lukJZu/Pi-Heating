@@ -73,14 +73,24 @@ except AttributeError:
 #calculate the remaining minutes to heat
 heatWaterMinAfterNeg = heatWaterMin - onTime.seconds / 60
 
-#set starting time to midnight tonight local time
-tomorrow = date.today()# + timedelta(days = 1)
-currentTime = datetime.combine(tomorrow, time()).replace(tzinfo = tzlocal())
+#calculating heat time today
+# todayDF = scheduleDF[scheduleDF['time'] < datetime.now().astimezone()]
+# state, secondsOn = 0, 0
+# for i in range(todayDF.shape[0]-1):
+# 	if todayDF.iloc[i, 1]:
+# 		state = 1
+# 	if not todayDF.iloc[i, 1] and state:
+# 		secondsOn += (todayDF.iloc[i, 0] - todayDF.iloc[i-1, 0]).seconds
+# 		state = 0
+
+#set starting time to the current hour 
+# tomorrow = date.today() + timedelta(days = 1)
+currentTime = datetime.now().astimezone(tzlocal()).replace(minute=0, second = 0, microsecond=0)
 
 costs, times = [], []
 
 #start from tomorrow and ends when reaches the next day
-while currentTime.date() < tomorrow + timedelta(days = 1) and not skipWhile:
+while currentTime.date() < date.today() + timedelta(days = 2) and not skipWhile:
 	#get the ratesDF row with the current time in it
 	currentRow = ratesDF[(ratesDF['valid_from'] <= currentTime) & (currentTime < ratesDF['valid_to'])]
 	if not currentRow.size:
@@ -149,7 +159,7 @@ for idx, value in modes.items():
 				scheduleDF['state'] == 0)].index)
 
 #set to turn off at 2359
-lastTime = datetime.combine(tomorrow+timedelta(days = 1),time()) - timedelta(minutes = 1) 
+lastTime = datetime.combine(date.today()+timedelta(days = 2),time()) - timedelta(minutes = 1) 
 lastTime = lastTime.astimezone()
 scheduleDF.loc[len(scheduleDF)] = [lastTime, 0]
 
