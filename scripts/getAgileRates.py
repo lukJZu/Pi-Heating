@@ -12,6 +12,10 @@ tariffCode = "E-1R-AGILE-18-02-21-E"
 
 resp = requests.get(urljoin(baseURL, f'v1/products/{productCode}/electricity-tariffs/{tariffCode}/standard-unit-rates/'))
 rates = resp.json()['results']
+# resp = requests.get(urljoin(baseURL, f'v1/electricity-meter-points/1460000502417'))
+# print(resp.json())
+# resp = requests.get(urljoin(baseURL, f'v1/electricity-meter-points/1460000502417/meters/20L3258803/consumption/'), auth=(API_KEY,''))
+# print(resp.json())
 
 df = pd.DataFrame(rates)
 df = df.drop(columns = 'value_exc_vat')
@@ -22,7 +26,4 @@ df = df.sort_values(by='valid_from')
 
 df.to_csv(os.path.join(Path.home(), 'data', 'agileRates.csv'), index=False)
 
-#with open('hotWater/agileRates.csv', 'w') as f:
-#    for rate in rates:
-#        f.write(f'{rate["valid_from"]},{rate["valid_to"]},{rate["value_inc_vat"]}\n')
 

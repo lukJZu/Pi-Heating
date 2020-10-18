@@ -8,7 +8,7 @@ import iso8601
 GPIO.setmode(GPIO.BCM)
 
 hotWaterPin 	= 17
-heatingPin 		= 18
+heatingPin 	    = 18
 boilerStatePin 	= 23
 
 GPIO.setup(hotWaterPin, GPIO.OUT)
@@ -31,9 +31,10 @@ def condenseTimes(timeStates:list):
 		if len(timeState) <= 1:
 			continue
 		if timeState[-1] == 'True':
-			state = True
-			startTime = iso8601.parse_date(timeState[0])
-			prevStates = timeState[1:]
+			if not prevState:
+				state = True
+				startTime = iso8601.parse_date(timeState[0])
+				prevStates = timeState[1:]
 		elif timeState[-1] == 'False':
 			state = False
 			if prevState:
@@ -52,14 +53,14 @@ def measureBoiler(prevMeasuredStates):
 		hotWaterState = not GPIO.input(hotWaterPin)
 		heatingState  = bool(GPIO.input(heatingPin))
 		boilerState   = not GPIO.input(boilerStatePin)
-	
+
 		states = [hotWaterState, heatingState, boilerState]
 		if states != prevMeasuredStates:
 			with open(csvFile, 'a') as f:
 				timeNow = datetime.now().replace(microsecond = 0).astimezone()
-				f.write(f'{timeNow.isoformat()},{",".join(states)}\n')
+				f.write(f'{timeNow.isoformat()},{",".join(str(s) for s in states)}\n')
 
-		return boilerState
+		return states
 
 
 def setHotWaterHeating(prevWaterState, prevHeatingState):
@@ -68,11 +69,15 @@ def setHotWaterHeating(prevWaterState, prevHeatingState):
 		#open the schedule csv file
 		with open(scheduleCSV, 'r') as f:
 			schedule = list(csv.reader(f))[1:]
+
 		#sort the schedule into list of start-end times
 		condensedTimes = condenseTimes(schedule)
+
 		#assume off initially
 		state = False
+
 		#iterate over the timeframes to check whethere timenow is within any timeframe
+
 		for timeframe in condensedTimes:
 			if timeframe[0] < timeNow < timeframe[1]:
 				state = True
@@ -101,6 +106,7 @@ def setHotWaterHeating(prevWaterState, prevHeatingState):
 	jsonState = checkJSONStates()
 	cState = jsonState['hotWater']['state']
 	bState = jsonState['hotWater']['boost']
+
 	#if boost is on
 	if bState:
 		#get the end time
@@ -124,10 +130,10 @@ def setHotWaterHeating(prevWaterState, prevHeatingState):
 
 	#check if previous state is the same as current state
 	#if not, then set the state
-	if prevWaterState != setHotWaterStat:
-		GPIO.output(hotWaterPin, not setHotWaterStat)
-	if prevHeatingState != setHeatingState:
-		GPIO.output(heatingPin, setHeatingState)
+#	if prevWaterState != setHotWaterStat:
+	GPIO.output(hotWaterPin, not setHotWaterStat)
+#	if prevHeatingState != setHeatingState:
+	GPIO.output(heatingPin, setHeatingState)
 
 
 	return setHotWaterStat, setHeatingState
@@ -141,7 +147,7 @@ if __name__ == "__main__":
 	try:
 		while True:
 			prevHotWaterState, prevHeatingState = setHotWaterHeating(prevHotWaterState, prevHeatingState)
-			prevBoilerState = measureBoiler(prevMeasuredStates)
+			prevMeasuredStates = measureBoiler(prevMeasuredStates)
 			time.sleep(secondsInterval)
 	except KeyboardInterrupt:
 		sys.exit()

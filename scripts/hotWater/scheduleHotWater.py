@@ -28,10 +28,11 @@ if scheduleDF.shape[0]:
 #get the past month avg from states.json
 with open(os.path.join(Path.home(), 'data', 'states.json'), 'r') as f:
 	states = json.load(f)
-heatWaterMin = states['hotWater']['pastMonthAvg']+10	#how long is the typical heat up
+heatWaterMin = states['hotWater']['pastMonthAvg'] + 10	#how long is the typical heat up
 # heatWaterMin = 50	#how long is the typical heat up
 fullHeating = 100									#how long is the full heat up
 kWUse = 9											#what is the power rating of the boiler
+heatBeforeHour = 16
 
 #loop over to find negative rates
 prevRate = 0
@@ -86,11 +87,11 @@ heatWaterMinAfterNeg = heatWaterMin - onTime.seconds / 60
 #set starting time to the current hour 
 # tomorrow = date.today() + timedelta(days = 1)
 currentTime = datetime.now().astimezone(tzlocal()).replace(minute=0, second = 0, microsecond=0)
-
+midnightToday = datetime.now().astimezone(tzlocal()).replace(minute=0, second = 0, microsecond=0, hour=0)
 costs, times = [], []
 
 #start from tomorrow and ends when reaches the next day
-while currentTime.date() < date.today() + timedelta(days = 2) and not skipWhile:
+while currentTime < midnightToday + timedelta(days = 1, hours=heatBeforeHour) and not skipWhile:
 	#get the ratesDF row with the current time in it
 	currentRow = ratesDF[(ratesDF['valid_from'] <= currentTime) & (currentTime < ratesDF['valid_to'])]
 	if not currentRow.size:
@@ -128,22 +129,20 @@ while currentTime.date() < date.today() + timedelta(days = 2) and not skipWhile:
 	currentTime = currentTime + timedelta(minutes=10)
 
 
-if not skipWhile:
-	if costs:
-		# costs.reverse()
-		# idx = len(costs) - costs.index(min(costs)) - 1
-		val, idx = min((val, idx) for (idx, val) in enumerate(costs))
-		timeOn = times[idx]
+if not skipWhile and costs:
+	# idx = len(costs) - costs.index(min(costs)) - 1
+	val, idx = min((val, idx) for (idx, val) in enumerate(costs))
+	timeOn = times[idx]
 
-		#checking for duplicates
-		timeOn = timeOn.astimezone() - timedelta(minutes = 1, seconds = 30)
-		scheduleDF.loc[len(scheduleDF)] = [timeOn, 1]
-		timeOff = timeOn + timedelta(minutes = (fullHeating - heatWaterMin + heatWaterMinAfterNeg))
-		scheduleDF.loc[len(scheduleDF)] = [timeOff, 0]
+	#checking for duplicates
+	timeOn = timeOn.astimezone() - timedelta(minutes = 1, seconds = 30)
+	scheduleDF.loc[len(scheduleDF)] = [timeOn, 1]
+	timeOff = timeOn + timedelta(minutes = (fullHeating - heatWaterMin + heatWaterMinAfterNeg))
+	scheduleDF.loc[len(scheduleDF)] = [timeOff, 0]
 
-		#check and drop anything between timeOn and timeOff
-		scheduleDF = scheduleDF.drop(scheduleDF[(scheduleDF['time'] > timeOn
-					) & (scheduleDF['time'] < timeOff)].index)
+	#check and drop anything between timeOn and timeOff
+	scheduleDF = scheduleDF.drop(scheduleDF[(scheduleDF['time'] > timeOn
+				) & (scheduleDF['time'] < timeOff)].index)
 
 #checking for duplicates and remove the off state
 modes = scheduleDF['time'].value_counts()
