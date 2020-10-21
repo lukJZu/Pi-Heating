@@ -17,7 +17,7 @@ try:
     scheduleDF = pd.read_csv(scheduleFile, header = 0)
 except:
     scheduleDF = pd.DataFrame(columns=['time', 'state'])
-        
+
 #timezone is system timezone
 scheduleDF['time'] = scheduleDF['time'].apply(iso8601.parse_date)
 
@@ -120,8 +120,9 @@ while currentTime < midnightToday + timedelta(days = 1, hours=heatBeforeHour) an
         if not nextRow.size:
             cost = 9999
             break
-
-        startTime, endTime, currentRate = nextRow.iat[0, 0], nextRow.iat[0, 1], nextRow.iat[0, 2]
+        
+        nextRow = nextRow.iloc[0]
+        startTime, endTime, currentRate = nextRow['valid_from'], nextRow['valid_to'], nextRow['rate']
         cTime = startTime
 
     cost += heatTimeLeft * kWUse / 3600 * currentRate
