@@ -1,4 +1,6 @@
-import sys, os, json, datetime
+import sys, os, json
+from datetime import date, datetime, timedelta
+from dateutil import tz
 from pathlib import Path
 import requests
 from urllib.parse import urljoin
@@ -18,9 +20,15 @@ meter_serial = octopus_keys['Meter Serial']
 #list to store the usage history
 history_list = []
 
+#setting the period of dates to retrieve
+#including timezone details
+period_from = datetime.combine(date.today(), datetime.min.time()).astimezone() - timedelta(days=1)
+period_to   = datetime.now().astimezone()
+
 url = urljoin(baseURL, f'v1/electricity-meter-points/{MPAN}/meters/{meter_serial}/consumption/')
+params = {'period_from':period_from.isoformat(), 'period_to':period_to.isoformat(), 'order_by':'period'}
 while url:
-    resp = requests.get(url, auth=(API_KEY,''))
+    resp = requests.get(url, auth=(API_KEY,''), params=params)
     if resp.status_code != 200:
         break
     
@@ -45,5 +53,7 @@ df['consumption'] = df['consumption_x'].fillna(df['consumption_y'])
 df = df.drop(columns=['consumption_x', 'consumption_y', 'interval_end'])
 
 #overwriting the existing DF
-# print(df)
 df.to_pickle(old_df_pckl)
+
+# for tupl in df.itertuples():
+#     print(tupl)
