@@ -23,7 +23,7 @@ def get_consumption():
 
     #setting the period of dates to retrieve
     #including timezone details
-    period_from = datetime.combine(date.today(), datetime.min.time()).astimezone() - timedelta(days=1)
+    period_from = datetime.combine(date.today(), datetime.min.time()).astimezone() - timedelta(days=40)
     period_to   = datetime.now().astimezone()
 
     url = urljoin(baseURL, f'v1/electricity-meter-points/{MPAN}/meters/{meter_serial}/consumption/')
@@ -36,6 +36,7 @@ def get_consumption():
         url = resp.json()['next']
         history_list.extend(resp.json()['results'])
 
+    # print(history_list)
     return history_list
 
 
