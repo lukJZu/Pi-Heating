@@ -28,7 +28,7 @@ if scheduleDF.shape[0]:
 #get the past month avg from states.json
 with open(os.path.join(Path.home(), 'data', 'states.json'), 'r') as f:
     states = json.load(f)
-heatWaterMin = states['hotWater']['pastMonthAvg']    #how long is the typical heat up
+heatWaterMin = states['hotWater']['pastMonthAvg'] + 10    #how long is the typical heat up
 # heatWaterMin = 50    #how long is the typical heat up
 fullHeating = 120                                    #how long is the full heat up
 kWUse = 9                                            #what is the power rating of the boiler
@@ -81,7 +81,7 @@ while currentTime < endLoopTime:
     cost += heatTimeLeft * kWUse / 3600 * currentRate
     costs.append(cost)
     times.append(currentTime)
-    currentTime = currentTime + timedelta(minutes=10)
+    currentTime = currentTime + timedelta(minutes=5)
 
 
 #getting the lowest cost starting time
