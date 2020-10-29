@@ -3,7 +3,6 @@ import time, csv, json
 import RPi.GPIO as GPIO
 from pathlib import Path
 from datetime import datetime
-import iso8601
 
 GPIO.setmode(GPIO.BCM)
 
@@ -33,12 +32,12 @@ def condenseTimes(timeStates:list):
         if timeState[-1] == 'True':
             if not prevState:
                 state = True
-                startTime = iso8601.parse_date(timeState[0])
+                startTime = datetime.fromisoformat(timeState[0])
                 prevStates = timeState[1:]
         elif timeState[-1] == 'False':
             state = False
             if prevState:
-                endTime = iso8601.parse_date(timeState[0])
+                endTime = datetime.fromisoformat(timeState[0])
                 prevStates = [False if a == 'False' else True for a in prevStates]
                 condensedTimes.append((startTime, endTime, prevStates
                             ))
