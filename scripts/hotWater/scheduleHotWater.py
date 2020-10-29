@@ -4,7 +4,6 @@ from datetime import date, time, datetime, timedelta
 from dateutil.tz import tzlocal
 from pathlib import Path
 import pandas as pd
-import iso8601
 
 #read in the csv file that contains the updated agile rates into dataframe
 ratesDF = pd.read_csv(os.path.join(Path.home(), 'data', 'agileRates.csv'))
