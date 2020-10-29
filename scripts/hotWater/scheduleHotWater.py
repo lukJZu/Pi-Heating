@@ -10,6 +10,14 @@ ratesDF = pd.read_csv(os.path.join(Path.home(), 'data', 'agileRates.csv'))
 ratesDF['valid_to'] = pd.to_datetime(ratesDF['valid_to'], utc=True)
 ratesDF['valid_from'] = pd.to_datetime(ratesDF['valid_from'], utc=True)
 
+
+time_variables_json = os.path.join(Path.home(), 'data', 'time_variables.json')
+try:
+    with open(time_variables_json, 'r') as f:
+        time_variables = json.load(f)
+except FileNotFoundError:
+    time_variables = {}
+
 #read in any existing schedule for hot water into a dataframe
 scheduleFile = os.path.join(Path.home(), 'data', 'hotWaterSchedule.csv')
 try:
@@ -20,18 +28,19 @@ except:
 #timezone is system timezone
 scheduleDF['time'] = pd.to_datetime(scheduleDF['time'], utc=True)
 
-#remove any rows which are older than today
+#remove any rows which are older than today and tomorrow's rows
 if scheduleDF.shape[0]:
     scheduleDF = scheduleDF.drop(scheduleDF[scheduleDF['time'].dt.date < date.today()].index)
+    scheduleDF = scheduleDF.drop(scheduleDF[scheduleDF['time'].dt.date == date.today()+timedelta(days=1)].index)
 
 #get the past month avg from states.json
 with open(os.path.join(Path.home(), 'data', 'states.json'), 'r') as f:
     states = json.load(f)
-heatWaterMin = states['hotWater']['pastMonthAvg'] + 10    #how long is the typical heat up
+heatWaterMin = states['hotWater']['pastMonthAvg'] + time_variables.get('addToAverage', 10)    #how long is the typical heat up
 # heatWaterMin = 50    #how long is the typical heat up
-fullHeating = 120                                    #how long is the full heat up
-kWUse = 9                                            #what is the power rating of the boiler
-heatBeforeHour = 16
+fullHeating = time_variables.get("fullHeatingMin", 100)         #how long is the full heat up
+kWUse = time_variables.get("boilerPowerkW", 9)                  #what is the power rating of the boiler
+heatBeforeHour = time_variables.get("heatBeforeHour", 16)       #set the hour of the day which to find the heat up time
 
 
 #set starting time to the current hour and convert everything to UTC for comparison
@@ -80,15 +89,27 @@ while currentTime < endLoopTime:
     cost += heatTimeLeft * kWUse / 3600 * currentRate
     costs.append(cost)
     times.append(currentTime)
-    currentTime = currentTime + timedelta(minutes=5)
+    currentTime = currentTime + timedelta(minutes=time_variables.get("searchBlockMins"))
 
 
 #getting the lowest cost starting time
 val, idx = min((val, idx) for (idx, val) in enumerate(costs))
 timeOn = times[idx]
 
-#checking for duplicates
-timeOn = timeOn - timedelta(minutes = 1, seconds = 30)
+#getting the smart meter time delay and add the offset
+if time_variables.get('smartMeterDelay'):
+    delayMinutes = time_variables.get('smartMeterDelay').get('minutes', 0)
+    delaySeconds = time_variables.get('smartMeterDelay').get('seconds', 0)
+else:
+    delayMinutes, delaySeconds = -1, -30
+#getting the boiler startup delay
+if time_variables.get('boilerStartupDelay'):
+    delayMinutes -= time_variables.get('boilerStartupDelay').get('minutes', 0)
+    delaySeconds -= time_variables.get('boilerStartupDelay').get('seconds', 0)
+else:
+    delayMinutes -= 1
+    delaySeconds -= 30
+timeOn = timeOn + timedelta(minutes = delayMinutes, seconds = delaySeconds)
 timeOff = timeOn + timedelta(minutes = fullHeating)
 
 #adding timeOn to the schedule
@@ -106,10 +127,10 @@ for tup in ratesDF.itertuples():
     #if rate is negative, set state to on
     if tup.rate < 0:
         startTime = tup.valid_from
-        negDF.loc[len(negDF)] = [startTime, 1]
+        negDF.loc[len(negDF)] = [startTime+timedelta(minutes=delayMinutes, seconds=delaySeconds), 1]
     #if rate becomes positive, set state to off
     elif tup.rate > 0 and prevRate < 0:
-        negDF.loc[len(negDF)] = [tup.valid_from-timedelta(minutes = 1, seconds=10), 0]
+        negDF.loc[len(negDF)] = [tup.valid_from+timedelta(minutes=delayMinutes, seconds=delaySeconds), 0]
     
     if tup.valid_from < timeOff < tup.valid_to and tup.rate > 0:
         scheduleDF.loc[len(scheduleDF)] = [timeOff, 0]
