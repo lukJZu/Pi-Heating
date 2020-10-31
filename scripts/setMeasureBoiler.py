@@ -6,7 +6,7 @@ from datetime import datetime
 
 GPIO.setmode(GPIO.BCM)
 
-hotWaterPin     = 17
+hotWaterPin        = 17
 heatingPin         = 18
 boilerStatePin     = 23
 

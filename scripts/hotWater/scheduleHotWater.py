@@ -20,18 +20,18 @@ except FileNotFoundError:
 
 #read in any existing schedule for hot water into a dataframe
 scheduleFile = os.path.join(Path.home(), 'data', 'hotWaterSchedule.csv')
-try:
-    scheduleDF = pd.read_csv(scheduleFile, header = 0)
-except:
-    scheduleDF = pd.DataFrame(columns=['time', 'state'])
+# try:
+#     scheduleDF = pd.read_csv(scheduleFile, header = 0)
+# except:
+scheduleDF = pd.DataFrame(columns=['time', 'state'])
 
 #timezone is system timezone
 scheduleDF['time'] = pd.to_datetime(scheduleDF['time'], utc=True)
 
 #remove any rows which are older than today and tomorrow's rows
-if scheduleDF.shape[0]:
-    scheduleDF = scheduleDF.drop(scheduleDF[scheduleDF['time'].dt.date < date.today()].index)
-    scheduleDF = scheduleDF.drop(scheduleDF[scheduleDF['time'].dt.date == date.today()+timedelta(days=1)].index)
+# if scheduleDF.shape[0]:
+#     scheduleDF = scheduleDF.drop(scheduleDF[scheduleDF['time'].dt.date < date.today()].index)
+#     scheduleDF = scheduleDF.drop(scheduleDF[scheduleDF['time'].dt.date == date.today()+timedelta(days=1)].index)
 
 #get the past month avg from states.json
 with open(os.path.join(Path.home(), 'data', 'states.json'), 'r') as f:
