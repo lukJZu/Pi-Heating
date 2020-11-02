@@ -3,6 +3,7 @@ import time, csv, json
 import RPi.GPIO as GPIO
 from pathlib import Path
 from datetime import datetime
+import pandas as pd
 
 GPIO.setmode(GPIO.BCM)
 
@@ -23,32 +24,35 @@ scheduleCSV = os.path.join(Path.home(), 'data', 'hotWaterSchedule.csv')
 secondsInterval = 20
 
 
-def condenseTimes(timeStates:list):
-    prevState = 0
-    condensedTimes = []
-    for timeState in timeStates:
-        if len(timeState) <= 1:
-            continue
-        if timeState[-1] == 'True':
-            if not prevState:
-                state = True
-                startTime = datetime.fromisoformat(timeState[0])
-                prevStates = timeState[1:]
-        elif timeState[-1] == 'False':
-            state = False
-            if prevState:
-                endTime = datetime.fromisoformat(timeState[0])
-                prevStates = [False if a == 'False' else True for a in prevStates]
-                condensedTimes.append((startTime, endTime, prevStates
-                            ))
-        prevState = state
+# def condenseTimes(timeStates:list):
+#     prevState = 0
+#     condensedTimes = []
+#     for timeState in timeStates:
+#         if len(timeState) <= 1:
+#             continue
+#         if timeState[-1] == 'True':
+#             if not prevState:
+#                 state = True
+#                 startTime = datetime.fromisoformat(timeState[0])
+#                 prevStates = timeState[1:]
+#         elif timeState[-1] == 'False':
+#             state = False
+#             if prevState:
+#                 endTime = datetime.fromisoformat(timeState[0])
+#                 prevStates = [False if a == 'False' else True for a in prevStates]
+#                 condensedTimes.append((startTime, endTime, prevStates
+#                             ))
+#         prevState = state
 
-    return condensedTimes
+#     return condensedTimes
 
 
 def measureBoiler(prevMeasuredStates):
     while True:
         #storing state of the hotWater, heating and boiler
+        # hotWaterState = 1
+        # heatingState  = 0
+        # boilerState   = 1
         hotWaterState = not GPIO.input(hotWaterPin)
         heatingState  = bool(GPIO.input(heatingPin))
         boilerState   = not GPIO.input(boilerStatePin)
@@ -65,23 +69,38 @@ def measureBoiler(prevMeasuredStates):
 def setHotWaterHeating(prevWaterState, prevHeatingState):
 
     def checkAgainstSchedule():
-        #open the schedule csv file
-        with open(scheduleCSV, 'r') as f:
-            schedule = list(csv.reader(f))[1:]
-
-        #sort the schedule into list of start-end times
-        condensedTimes = condenseTimes(schedule)
-
+        #open the schedule csv file into dataframe
+        # with open(scheduleCSV, 'r') as f:
+        #     schedule = list(csv.reader(f))[1:]
+        scheduleDF = pd.read_csv(scheduleCSV)
+        scheduleDF['start_time'] = pd.to_datetime(scheduleDF['start_time'], utc=True)
+        scheduleDF['end_time'] = pd.to_datetime(scheduleDF['end_time'], utc=True)
+         
         #assume off initially
         state = False
+        timestampNow = pd.Timestamp.now('utc')
+        time_block_now = scheduleDF[(scheduleDF['start_time'] < timestampNow) & (scheduleDF['end_time'] > timestampNow)]
+        if len(time_block_now.index):
+            state = time_block_now.iloc[0].hot_water_state
+        
+        # for time_block in schedule:
+        #     start_time = datetime.fromisoformat(time_block[0])
+        #     end_time = datetime.fromisoformat(time_block[1])
+        #     print(start_time, end_time)
+        #     if start_time < timeNow < end_time:
+        #         state = time_block[2]
+
+        #sort the schedule into list of start-end times
+        # condensedTimes = condenseTimes(schedule)
+
 
         #iterate over the timeframes to check whethere timenow is within any timeframe
 
-        for timeframe in condensedTimes:
-            if timeframe[0] < timeNow < timeframe[1]:
-                state = True
-                break
-
+        # for timeframe in condensedTimes:
+        #     if timeframe[0] < timeNow < timeframe[1]:
+        #         state = True
+        #         break
+        
         return state
 
     #getting the boost states from the json file
