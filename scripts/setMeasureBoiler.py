@@ -123,7 +123,7 @@ def setHotWaterHeating(prevWaterState, prevHeatingNestState):
         else:
             returnState = scheduleState
         
-        return returnState, bState
+        return returnState
         
 
     #update the boost json file by setting boost to off
@@ -140,12 +140,13 @@ def setHotWaterHeating(prevWaterState, prevHeatingNestState):
     jsonState = checkJSONStates()
     scheduleStates = checkAgainstSchedule()
 
-    setHotWaterState = setState('hotWater', jsonState, scheduleStates['hotWater'])[0]
+    setHotWaterState = setState('hotWater', jsonState, scheduleStates['hotWater'])
 
     if jsonState['heating']['state']:
-        heatingStates = setState('heating', jsonState, scheduleStates['hotWater'])
-        setHeatingState = heatingStates[0]
-        if prevHeatingNestState != heatingStates[1]:
+        setHeatingState = True
+        heatingState = setState('heating', jsonState, scheduleStates['hotWater'])
+
+        if prevHeatingNestState != heatingState:
             with open(f'{Path.home()}/data/oauth_secret_web.json', 'r') as f:
                 json_dict = json.load(f)['web']
             device_id = json_dict['device_id']
@@ -153,7 +154,7 @@ def setHotWaterHeating(prevWaterState, prevHeatingNestState):
 
             access_token = get_access_token()
             url = f"https://smartdevicemanagement.googleapis.com/v1/enterprises/{project_id}/devices/{device_id}"
-            heatTemp = boostHeatingThermostatTemp if setHeatingState else 17
+            heatTemp = boostHeatingThermostatTemp if heatingState else 17
             setData = {
                 "command" : "sdm.devices.commands.ThermostatTemperatureSetpoint.SetHeat",
                 "params" : {
@@ -163,7 +164,7 @@ def setHotWaterHeating(prevWaterState, prevHeatingNestState):
             requests.post(url+':executeCommand', headers={"Content-Type": "application/json", 
                             "Authorization": f"Bearer {access_token}"},
                             data=json.dumps(setData))
-            prevHeatingNestState = heatingStates[1]
+            prevHeatingNestState = heatingState
     else:
         setHeatingState = False
 
