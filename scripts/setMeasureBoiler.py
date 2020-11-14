@@ -77,7 +77,7 @@ def measureBoiler(prevMeasuredStates):
         return states
 
 
-def setHotWaterHeating(prevWaterState, prevHeatingState):
+def setHotWaterHeating(prevWaterState, prevHeatingNestState):
 
     def checkAgainstSchedule():
         scheduleDF = pd.read_csv(scheduleCSV)
@@ -116,13 +116,14 @@ def setHotWaterHeating(prevWaterState, prevHeatingState):
             elif endTime < timeNow:
                 turnOffBoost(stateType)
                 returnState = scheduleState
+                bState = False
         #if boost is off, set state according to schedule
         elif not cState:
             returnState = False
         else:
             returnState = scheduleState
         
-        return returnState
+        return returnState, bState
         
 
     #update the boost json file by setting boost to off
@@ -139,11 +140,35 @@ def setHotWaterHeating(prevWaterState, prevHeatingState):
     jsonState = checkJSONStates()
     scheduleStates = checkAgainstSchedule()
 
-    setHotWaterState = setState('hotWater', jsonState, scheduleStates['hotWater'])
-    # setHeatingState = setState('heating', jsonState, scheduleStates['hotWater'])
+    setHotWaterState = setState('hotWater', jsonState, scheduleStates['hotWater'])[0]
+
+    if jsonState['heating']['state']:
+        heatingStates = setState('heating', jsonState, scheduleStates['hotWater'])
+        setHeatingState = heatingStates[0]
+        if prevHeatingNestState != heatingStates[1]:
+            with open(f'{Path.home()}/data/oauth_secret_web.json', 'r') as f:
+                json_dict = json.load(f)['web']
+            device_id = json_dict['device_id']
+            project_id = json_dict['device_access_project_ID']
+
+            access_token = get_access_token()
+            url = f"https://smartdevicemanagement.googleapis.com/v1/enterprises/{project_id}/devices/{device_id}"
+            heatTemp = boostHeatingThermostatTemp if setHeatingState else 17
+            setData = {
+                "command" : "sdm.devices.commands.ThermostatTemperatureSetpoint.SetHeat",
+                "params" : {
+                    "heatCelsius" : heatTemp
+                }
+            }
+            requests.post(url+':executeCommand', headers={"Content-Type": "application/json", 
+                            "Authorization": f"Bearer {access_token}"},
+                            data=json.dumps(setData))
+            heatingNestState = heatingStates[1]
+    else:
+        setHeatingState = False
 
     #read heating state
-    setHeatingState = jsonState['heating']['state']
+    #setHeatingState = jsonState['heating']['state']
 
     #check if previous state is the same as current state
     #if not, then set the state
@@ -152,28 +177,28 @@ def setHotWaterHeating(prevWaterState, prevHeatingState):
 #    if prevHeatingState != setHeatingState:
     GPIO.output(heatingPin, setHeatingState)
     
-    if prevHeatingState != setHeatingState:
-        with open(f'{Path.home()}/data/oauth_secret_web.json', 'r') as f:
-            json_dict = json.load(f)['web']
-        device_id = json_dict['device_id']
-        project_id = json_dict['device_access_project_ID']
+    # if prevHeatingState != setHeatingState:
+    #     with open(f'{Path.home()}/data/oauth_secret_web.json', 'r') as f:
+    #         json_dict = json.load(f)['web']
+    #     device_id = json_dict['device_id']
+    #     project_id = json_dict['device_access_project_ID']
 
-        access_token = get_access_token()
-        url = f"https://smartdevicemanagement.googleapis.com/v1/enterprises/{project_id}/devices/{device_id}"
-        heatTemp = boostHeatingThermostatTemp if setHeatingState else 17
-        setData = {
-            "command" : "sdm.devices.commands.ThermostatTemperatureSetpoint.SetHeat",
-            "params" : {
-                "heatCelsius" : heatTemp
-            }
-        }
-        requests.post(url+':executeCommand', headers={"Content-Type": "application/json", 
-                        "Authorization": f"Bearer {access_token}"},
-                        data=json.dumps(setData))
+    #     access_token = get_access_token()
+    #     url = f"https://smartdevicemanagement.googleapis.com/v1/enterprises/{project_id}/devices/{device_id}"
+    #     heatTemp = boostHeatingThermostatTemp if setHeatingState else 17
+    #     setData = {
+    #         "command" : "sdm.devices.commands.ThermostatTemperatureSetpoint.SetHeat",
+    #         "params" : {
+    #             "heatCelsius" : heatTemp
+    #         }
+    #     }
+    #     requests.post(url+':executeCommand', headers={"Content-Type": "application/json", 
+    #                     "Authorization": f"Bearer {access_token}"},
+    #                     data=json.dumps(setData))
 
 
 
-    return setHotWaterState, setHeatingState
+    return setHotWaterState, heatingNestState
 
 
 
