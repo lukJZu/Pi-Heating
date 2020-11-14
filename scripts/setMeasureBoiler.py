@@ -2,7 +2,8 @@ import os, sys, pathlib
 import time, csv, json
 import RPi.GPIO as GPIO
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
+import requests
 import pandas as pd
 
 GPIO.setmode(GPIO.BCM)
@@ -22,29 +23,39 @@ csvFile = os.path.join(Path.home(), 'data', 'boilerState.csv')
 boostJSON = os.path.join(Path.home(), 'data', 'states.json')
 scheduleCSV = os.path.join(Path.home(), 'data', 'hotWaterSchedule.csv')
 secondsInterval = 20
+boostHeatingThermostatTemp = 23
 
 
-# def condenseTimes(timeStates:list):
-#     prevState = 0
-#     condensedTimes = []
-#     for timeState in timeStates:
-#         if len(timeState) <= 1:
-#             continue
-#         if timeState[-1] == 'True':
-#             if not prevState:
-#                 state = True
-#                 startTime = datetime.fromisoformat(timeState[0])
-#                 prevStates = timeState[1:]
-#         elif timeState[-1] == 'False':
-#             state = False
-#             if prevState:
-#                 endTime = datetime.fromisoformat(timeState[0])
-#                 prevStates = [False if a == 'False' else True for a in prevStates]
-#                 condensedTimes.append((startTime, endTime, prevStates
-#                             ))
-#         prevState = state
+def get_access_token():
+    with open(os.path.join(Path.home(), 'data', 'tokens.json'), 'r') as f:
+        token_dict = json.load(f)
 
-#     return condensedTimes
+    expiry_time = datetime.fromisoformat(token_dict['expiry'])
+    if expiry_time > datetime.now():
+        return token_dict['access_token']
+    
+    with open(os.path.join(Path.home(), 'data', 'oauth_secret_web.json'), 'r') as f:
+        credentials = json.load(f)['web']
+        
+    url = "https://www.googleapis.com/oauth2/v4/token?"+\
+            f"client_id={credentials['client_id']}"+\
+            f"&client_secret={credentials['client_secret']}"+\
+            f"&refresh_token={token_dict['refresh_token']}"+\
+            "&grant_type=refresh_token"
+
+    resp = requests.post(url).json()
+    access_token = resp['access_token']
+    # refresh_token = resp['refresh_token']
+
+    token_dict['access_token'] = access_token
+    # token_dict['refresh_token'] = refresh_token
+    new_expiry = datetime.now() + timedelta(seconds=3599)
+    token_dict['expiry'] = new_expiry.isoformat()
+
+    with open(os.path.join(Path.home(), 'data', 'tokens.json'), 'w') as f:
+        json.dump(token_dict, f)
+    
+    return access_token
 
 
 def measureBoiler(prevMeasuredStates):
@@ -69,39 +80,19 @@ def measureBoiler(prevMeasuredStates):
 def setHotWaterHeating(prevWaterState, prevHeatingState):
 
     def checkAgainstSchedule():
-        #open the schedule csv file into dataframe
-        # with open(scheduleCSV, 'r') as f:
-        #     schedule = list(csv.reader(f))[1:]
         scheduleDF = pd.read_csv(scheduleCSV)
         scheduleDF['start_time'] = pd.to_datetime(scheduleDF['start_time'], utc=True)
         scheduleDF['end_time'] = pd.to_datetime(scheduleDF['end_time'], utc=True)
          
         #assume off initially
-        state = False
+        hotWaterState, heatingState = False, False
         timestampNow = pd.Timestamp.now('utc')
         time_block_now = scheduleDF[(scheduleDF['start_time'] < timestampNow) & (scheduleDF['end_time'] > timestampNow)]
         if len(time_block_now.index):
-            state = time_block_now.iloc[0].hot_water_state
+            hotWaterState = time_block_now.iloc[0].hot_water_state
+            heatingState = time_block_now.iloc[0].heating_state
         
-        # for time_block in schedule:
-        #     start_time = datetime.fromisoformat(time_block[0])
-        #     end_time = datetime.fromisoformat(time_block[1])
-        #     print(start_time, end_time)
-        #     if start_time < timeNow < end_time:
-        #         state = time_block[2]
-
-        #sort the schedule into list of start-end times
-        # condensedTimes = condenseTimes(schedule)
-
-
-        #iterate over the timeframes to check whethere timenow is within any timeframe
-
-        # for timeframe in condensedTimes:
-        #     if timeframe[0] < timeNow < timeframe[1]:
-        #         state = True
-        #         break
-        
-        return state
+        return {"hotWater": hotWaterState, "heating":heatingState}
 
     #getting the boost states from the json file
     def checkJSONStates():
@@ -109,39 +100,47 @@ def setHotWaterHeating(prevWaterState, prevHeatingState):
             hotWaterStates = json.load(f)
         return hotWaterStates
 
-    #update the boost json file by setting boost to off
-    def turnOffBoost():
-        hotWaterStates = checkJSONStates()
-        hotWaterStates['hotWater']['boost'] = False
-        with open(boostJSON, 'w') as f:
-            json.dump(hotWaterStates, f)
+    def setState(stateType, jsonState, scheduleState):
+        cState = jsonState[stateType]['state']
+        bState = jsonState[stateType]['boost']
 
-    # prevState = False
+        #if boost is on
+        if bState:
+            #get the end time
+            endTime = datetime.fromisoformat(jsonState[stateType]['endTime'])
+            #if end time hasn't passed, then set state as on
+            if timeNow < endTime:
+                returnState = True
+            #if end time has passed, turn boost off by updating json, 
+            #then set state according to schedule
+            elif endTime < timeNow:
+                turnOffBoost(stateType)
+                returnState = scheduleState
+        #if boost is off, set state according to schedule
+        elif not cState:
+            returnState = False
+        else:
+            returnState = scheduleState
+        
+        return returnState
+        
+
+    #update the boost json file by setting boost to off
+    def turnOffBoost(stateType):
+        states = checkJSONStates()
+        states[stateType]['boost'] = False
+        with open(boostJSON, 'w') as f:
+            json.dump(states, f)
+
     #get the current time
     timeNow = datetime.now().astimezone()
 
     #get the boostState
     jsonState = checkJSONStates()
-    cState = jsonState['hotWater']['state']
-    bState = jsonState['hotWater']['boost']
+    scheduleStates = checkAgainstSchedule()
 
-    #if boost is on
-    if bState:
-        #get the end time
-        endTime = datetime.fromisoformat(jsonState['hotWater']['endTime'])
-        #if end time hasn't passed, then set state as on
-        if timeNow < endTime:
-            setHotWaterStat = True
-        #if end time has passed, turn boost off by updating json, 
-        #then set state according to schedule
-        elif endTime < timeNow:
-            turnOffBoost()
-            setHotWaterStat = checkAgainstSchedule()
-    #if boost is off, set state according to schedule
-    elif not cState:
-        setHotWaterStat = False
-    else:
-        setHotWaterStat = checkAgainstSchedule()
+    setHotWaterState = setState('hotWater', jsonState, scheduleStates['hotWater'])
+    # setHeatingState = setState('heating', jsonState, scheduleStates['hotWater'])
 
     #read heating state
     setHeatingState = jsonState['heating']['state']
@@ -149,12 +148,32 @@ def setHotWaterHeating(prevWaterState, prevHeatingState):
     #check if previous state is the same as current state
     #if not, then set the state
 #    if prevWaterState != setHotWaterStat:
-    GPIO.output(hotWaterPin, not setHotWaterStat)
+    GPIO.output(hotWaterPin, not setHotWaterState)
 #    if prevHeatingState != setHeatingState:
     GPIO.output(heatingPin, setHeatingState)
+    
+    if prevHeatingState != setHeatingState:
+        with open(f'{Path.home()}/data/oauth_secret_web.json', 'r') as f:
+            json_dict = json.load(f)['web']
+        device_id = json_dict['device_id']
+        project_id = json_dict['device_access_project_ID']
+
+        access_token = get_access_token()
+        url = f"https://smartdevicemanagement.googleapis.com/v1/enterprises/{project_id}/devices/{device_id}"
+        heatTemp = boostHeatingThermostatTemp if setHeatingState else 17
+        setData = {
+            "command" : "sdm.devices.commands.ThermostatTemperatureSetpoint.SetHeat",
+            "params" : {
+                "heatCelsius" : heatTemp
+            }
+        }
+        requests.post(url+':executeCommand', headers={"Content-Type": "application/json", 
+                        "Authorization": f"Bearer {access_token}"},
+                        data=json.dumps(setData))
 
 
-    return setHotWaterStat, setHeatingState
+
+    return setHotWaterState, setHeatingState
 
 
 
