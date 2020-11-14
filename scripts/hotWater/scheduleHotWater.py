@@ -93,8 +93,9 @@ while currentTime < endLoopTime:
     currentTime = currentTime + timedelta(minutes=time_variables.get("searchBlockMins"))
 
 
-#getting the lowest cost starting time
-val, idx = min((val, idx) for (idx, val) in enumerate(costs))
+#getting the lowest cost starting time in the latest time in the day
+# val, idx = min((val, idx) for (idx, val) in enumerate(costs))     #earliest time of day
+idx = min(range(len(costs)), key=lambda i: (costs[i], -i))          #latest time of day
 timeOn = times[idx]
 
 #getting the smart meter time delay and add the offset
@@ -116,27 +117,7 @@ timeOff = timeOn + timedelta(minutes = fullHeating)
 
 #get the time blocks with negative rates
 negDF = ratesDF[(ratesDF.valid_from > datetime.now().astimezone(pytz.utc)) & (ratesDF.rate <= 0)]
-# print(negDF)
-# for tup in ratesDF.itertuples():
-#     #skipping any rows which are older than the start time of the min cost
-#     if tup.valid_from < datetime.now().astimezone(pytz.utc):
-#         continue
-#     #iterating over the block times and store the negative rates
-#     if tup.rate < 0:
-#         negDF.loc[len(negDF)] = [tup.valid_from, tup.valid_to, tup.rate]
-#         # negDF.loc[len(negDF)] = [startTime+timedelta(minutes=delayMinutes, seconds=delaySeconds)   1, 1]
-#     #if rate becomes positive, set state to off
-#     elif tup.rate > 0 and prevRate < 0:
-#         negDF.loc[len(negDF)] = [startTime+timedelta(minutes=delayMinutes, seconds=delaySeconds),
-#                                     tup.valid_from+timedelta(minutes=delayMinutes, seconds=delaySeconds), 1, 1, prevRate]
-    
-    # if tup.valid_from < timeOff < tup.valid_to and tup.rate > 0:
-    #     scheduleDF.loc[len(scheduleDF)] = [timeOff, 0, 0]
-    #     scheduleDF = scheduleDF.drop(scheduleDF[(scheduleDF['time'] > timeOn
-    #                 ) & (scheduleDF['time'] < timeOff)].index)
 
-    # prevRate = tup.rate
-# print(negDF)
 if not len(negDF.index):
     #adding timeOn to the schedule
     scheduleDF.loc[len(scheduleDF)] = [timeOn, timeOff, 1, 0]
@@ -146,28 +127,42 @@ else:
         #sort the negDF and add the rows to the schedule one by one
         negDF = negDF.sort_values(by=['rate', 'valid_from'], ascending=[True, False])
         heat_min_added, row_no = 0, 0
-        while heat_min_added < fullHeating and row_no < len(negDF.index): 
-            # get the earliest time block with the lowest rate
+        while row_no < len(negDF.index):#and heat_min_added < fullHeating: 
+            # get the next earliest time block with the lowest rate
             min_rate_block = negDF.iloc[row_no]
-            if (fullHeating - heat_min_added) < (min_rate_block.valid_to - min_rate_block.valid_from).seconds / 60:
+            
+            # if all the hot water minutes have been added, then turn on heating for the rest of the time
+            if (fullHeating - heat_min_added) < 0:
+                hot_water_on = 1 if min_rate_block.valid_from > scheduleDF.end_time.max() else 0
+                
+                scheduleDF.loc[len(scheduleDF)] = [min_rate_block.valid_from, min_rate_block.valid_to, hot_water_on, 1]
+
+            #check if the remaining minutes to be added is smaller than the block minutes
+            #if yes then add the remaining minutes to schedule
+            elif (fullHeating - heat_min_added) < (min_rate_block.valid_to - min_rate_block.valid_from).seconds / 60:
                 #find the remaining row which is later than the latest time in the schedule
-                remaining_blocks = negDF[negDF.valid_from > scheduleDF.end_time.max()]
-                if len(remaining_blocks.index):
-                    for row in remaining_blocks.itertuples():
-                        scheduleDF.loc[len(scheduleDF)] = [row.valid_from, row.valid_to, 1, 1]
-                        heat_min_added += (row.valid_to - row.valid_from).seconds / 60
-                    break
-                else:
-                    scheduleDF.loc[len(scheduleDF)] = [min_rate_block.valid_from, 
-                                                        min_rate_block.valid_from + timedelta(minutes=(fullHeating - heat_min_added)),
-                                                        1, 1]
-                    heat_min_added += (min_rate_block.valid_to - min_rate_block.valid_from).seconds / 60
-                    break
+                # remaining_blocks = negDF[negDF.valid_from > scheduleDF.end_time.max()]
+                #if there are blocks left later than the latest time in schedule
+                # if len(remaining_blocks.index):
+                #     for row in remaining_blocks.itertuples():
+                #         scheduleDF.loc[len(scheduleDF)] = [row.valid_from, row.valid_to, 1, 1]
+                #         heat_min_added += (row.valid_to - row.valid_from).seconds / 60
+                # else:
+                scheduleDF.loc[len(scheduleDF)] = [min_rate_block.valid_from, 
+                                                    min_rate_block.valid_from + timedelta(minutes=(fullHeating - heat_min_added)),
+                                                    1, 0]
+                scheduleDF.loc[len(scheduleDF)] = [min_rate_block.valid_from + timedelta(minutes=(fullHeating - heat_min_added)), 
+                                                    min_rate_block.valid_to,
+                                                    1, 1]
+                heat_min_added += (min_rate_block.valid_to - min_rate_block.valid_from).seconds / 60
+
             else:
-            #add the time block to the schedule
-                scheduleDF.loc[len(scheduleDF)] = [min_rate_block.valid_from, min_rate_block.valid_to, 1, 1]
+                #if heat min left is bigger than 
+                #add the entire time block to the schedule
+                scheduleDF.loc[len(scheduleDF)] = [min_rate_block.valid_from, min_rate_block.valid_to, 1, 0]
                 heat_min_added += (min_rate_block.valid_to - min_rate_block.valid_from).seconds / 60
             row_no += 1
+            
     else:
         #adding timeOn to the schedule
         scheduleDF.loc[len(scheduleDF)] = [timeOn, timeOff, 1, 0]
@@ -176,64 +171,15 @@ else:
 scheduleDF.start_time = scheduleDF.start_time + timedelta(minutes = delayMinutes, seconds = delaySeconds)
 scheduleDF.end_time = scheduleDF.end_time + timedelta(minutes = delayMinutes, seconds = delaySeconds)
 
-        
-        # negDF = negDF.drop(index=negDF[negDF.valid_from == min_rate_block.valid_from].index)
-        # negDF = negDF.sort_values(by=['rate', 'valid_from'], ascending=[True, False])
-        # print(negDF)
-        # while neg_min_left > heatWaterMin:
-
-
-    #     scheduleDF.loc[len(scheduleDF)]
-    # neg_schedule_outside_timeOn = negDF[negDF.end_time > timeOff]
-    # neg_schedule_outside_timeOn = neg_schedule_outside_timeOn[negDF.start_time > timeOn]
-    # if len(neg_schedule_outside_timeOn.index):
-    #     neg_rate_mins_outside_timeOn = neg_schedule_outside_timeOn.apply(
-    #                                     lambda x: x.end_time - x.start_time, axis=1).sum().seconds / 60
-    #     if neg_rate_mins_outside_timeOn > fullHeating:
-    #         asd
-    #     else:
-    #         new_time_off = timeOn + timedelta(minutes=fullHeating-)
-    #         timeOffDF = ratesDF[ratesDF.valid_from < timeOff]
-    #         timeOffDF = timeOffDF[timeOffDF.valid_to > timeOff]
-    #         #iteratively minus the timeOff minute by minute to make sure timeOn-timeOff remains the cheapest
-    #         while timeOffDF.iloc[0].rate > neg_schedule_outside_timeOn.rate.max():
-    #             timeOff -= timedelta(minutes=1)
-    #             timeOffDF = ratesDF[ratesDF.valid_from < timeOff]
-    #             timeOffDF = timeOffDF[timeOffDF.valid_to > timeOff]
-    #         scheduleDF.loc[len(scheduleDF)] = [timeOn, timeOff, 1, 0]
-    # else:
-    #     #adding timeOn to the schedule
-    #     scheduleDF.loc[len(scheduleDF)] = [timeOn, timeOff, 1, 0]
-
-    #combining the negrates DF back to main scheduleDF
-    # scheduleDF = pd.concat([scheduleDF, neg_schedule_outside_timeOn.drop(columns=['rate'])], ignore_index = True)
-
-print(scheduleDF)
-#checking for duplicates and remove the off state
-# modes = scheduleDF['start_time'].value_counts()
-# for idx, value in modes.items():
-#     if value > 1:
-#         #checking if the duplicated times have same or different states
-#         subDF = scheduleDF[scheduleDF['start_time'] == idx]
-#         stateCount = subDF['hot_water_state'].nunique()
-#         #if different states, then drop the off state
-#         if stateCount > 1:
-#             scheduleDF = scheduleDF.drop(scheduleDF[(
-#                 scheduleDF['start_time'] == idx) & (
-#                 scheduleDF['hot_water_state'] == 0)].index)
-
-#set to turn off at 2359
-# lastTime = datetime.combine(date.today()+timedelta(days = 2),time()) - timedelta(minutes = 1)
-# lastTime = lastTime.astimezone(pytz.utc)
-# scheduleDF.loc[len(scheduleDF)] = [lastTime, 0]
 
 #drop duplicated rows
 scheduleDF = scheduleDF.drop(scheduleDF[scheduleDF.duplicated()].index)
 
-scheduleDF['start_time'] = scheduleDF['start_time'].dt.tz_convert(tzlocal())
-scheduleDF['end_time'] = scheduleDF['end_time'].dt.tz_convert(tzlocal())
+# scheduleDF['start_time'] = scheduleDF['start_time'].dt.tz_convert(tzlocal())
+# scheduleDF['end_time'] = scheduleDF['end_time'].dt.tz_convert(tzlocal())
 scheduleDF['hot_water_state'] = scheduleDF['hot_water_state'].astype(bool)
 scheduleDF['heating_state'] = scheduleDF['heating_state'].astype(bool)
 scheduleDF = scheduleDF.sort_values(by = 'start_time')
+print(scheduleDF)
 
 scheduleDF.to_csv(scheduleFile, index=False)
