@@ -111,7 +111,7 @@ if time_variables.get('boilerStartupDelay'):
 else:
     delayMinutes -= 1
     delaySeconds -= 30
-timeOn = timeOn #+ timedelta(minutes = delayMinutes, seconds = delaySeconds)
+timeOn = timeOn
 timeOff = timeOn + timedelta(minutes = fullHeating)
 
 

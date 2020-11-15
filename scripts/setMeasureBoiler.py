@@ -59,25 +59,26 @@ def get_access_token():
 
 
 def measureBoiler(prevMeasuredStates):
-    while True:
-        #storing state of the hotWater, heating and boiler
-        # hotWaterState = 1
-        # heatingState  = 0
-        # boilerState   = 1
-        hotWaterState = not GPIO.input(hotWaterPin)
-        heatingState  = bool(GPIO.input(heatingPin))
-        boilerState   = not GPIO.input(boilerStatePin)
+    #storing state of the hotWater, heating and boiler
+    # hotWaterState = 1
+    # heatingState  = 0
+    # boilerState   = 1
+    hotWaterState = not GPIO.input(hotWaterPin)
+    heatingState  = bool(GPIO.input(heatingPin))
+    boilerState   = not GPIO.input(boilerStatePin)
 
-        states = [hotWaterState, heatingState, boilerState]
-        if states != prevMeasuredStates:
-            with open(csvFile, 'a') as f:
-                timeNow = datetime.now().replace(microsecond = 0).astimezone()
-                f.write(f'{timeNow.isoformat()},{",".join(str(s) for s in states)}\n')
+    states = [hotWaterState, heatingState, boilerState]
+    if states != prevMeasuredStates:
+        with open(csvFile, 'a') as f:
+            timeNow = datetime.now().replace(microsecond = 0).astimezone()
+            f.write(f'{timeNow.isoformat()},{",".join(str(s) for s in states)}\n')
 
-        return states
+    return states
 
 
-def setHotWaterHeating(prevWaterState, prevHeatingNestState):
+def setHotWaterHeating(recordStates):
+
+    prevHeatingNestState = recordStates[1]
 
     def checkAgainstSchedule():
         scheduleDF = pd.read_csv(scheduleCSV)
@@ -178,8 +179,16 @@ def setHotWaterHeating(prevWaterState, prevHeatingNestState):
 #    if prevHeatingState != setHeatingState:
     GPIO.output(heatingPin, setHeatingState)
 
+    #check and record boiler state
+    boilerState   = not GPIO.input(boilerStatePin)
 
-    return setHotWaterState, prevHeatingNestState
+    recordStates = [setHotWaterState, setHeatingState, boilerState]
+    if recordStates != prevMeasuredStates:
+        with open(csvFile, 'a') as f:
+            timeNow = datetime.now().replace(microsecond = 0).astimezone()
+            f.write(f'{timeNow.isoformat()},{",".join(str(s) for s in recordStates)}\n')
+
+    return recordStates
 
 
 
@@ -187,10 +196,11 @@ if __name__ == "__main__":
     prevMeasuredStates = [-1, -1, -1]
     prevHotWaterState = False
     prevHeatingState = False
+    recordStates = [0, 0, -1]
     try:
         while True:
-            prevHotWaterState, prevHeatingState = setHotWaterHeating(prevHotWaterState, prevHeatingState)
-            prevMeasuredStates = measureBoiler(prevMeasuredStates)
+            recordStates = setHotWaterHeating(recordStates)
+            # prevMeasuredStates = measureBoiler(prevMeasuredStates)
             time.sleep(secondsInterval)
     except KeyboardInterrupt:
         sys.exit()
