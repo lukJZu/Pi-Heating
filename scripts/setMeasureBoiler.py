@@ -196,7 +196,7 @@ if __name__ == "__main__":
     prevMeasuredStates = [-1, -1, -1]
     prevHotWaterState = False
     prevHeatingState = False
-    recordStates = [0, 0, -1]
+    recordStates = [False, False, -1]
     try:
         while True:
             recordStates = setHotWaterHeating(recordStates)
