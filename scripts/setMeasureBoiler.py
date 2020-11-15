@@ -58,22 +58,22 @@ def get_access_token():
     return access_token
 
 
-def measureBoiler(prevMeasuredStates):
-    #storing state of the hotWater, heating and boiler
-    # hotWaterState = 1
-    # heatingState  = 0
-    # boilerState   = 1
-    hotWaterState = not GPIO.input(hotWaterPin)
-    heatingState  = bool(GPIO.input(heatingPin))
-    boilerState   = not GPIO.input(boilerStatePin)
+# def measureBoiler(prevMeasuredStates):
+#     #storing state of the hotWater, heating and boiler
+#     # hotWaterState = 1
+#     # heatingState  = 0
+#     # boilerState   = 1
+#     hotWaterState = not GPIO.input(hotWaterPin)
+#     heatingState  = bool(GPIO.input(heatingPin))
+#     boilerState   = not GPIO.input(boilerStatePin)
 
-    states = [hotWaterState, heatingState, boilerState]
-    if states != prevMeasuredStates:
-        with open(csvFile, 'a') as f:
-            timeNow = datetime.now().replace(microsecond = 0).astimezone()
-            f.write(f'{timeNow.isoformat()},{",".join(str(s) for s in states)}\n')
+#     states = [hotWaterState, heatingState, boilerState]
+#     if states != prevMeasuredStates:
+#         with open(csvFile, 'a') as f:
+#             timeNow = datetime.now().replace(microsecond = 0).astimezone()
+#             f.write(f'{timeNow.isoformat()},{",".join(str(s) for s in states)}\n')
 
-    return states
+#     return states
 
 
 def setHotWaterHeating(recordStates):
@@ -182,7 +182,7 @@ def setHotWaterHeating(recordStates):
     #check and record boiler state
     boilerState   = not GPIO.input(boilerStatePin)
 
-    recordStates = [setHotWaterState, setHeatingState, boilerState]
+    recordStates = [setHotWaterState, prevHeatingNestState, boilerState]
     if recordStates != prevMeasuredStates:
         with open(csvFile, 'a') as f:
             timeNow = datetime.now().replace(microsecond = 0).astimezone()
