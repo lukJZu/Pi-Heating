@@ -23,7 +23,7 @@ csvFile = os.path.join(Path.home(), 'data', 'boilerState.csv')
 boostJSON = os.path.join(Path.home(), 'data', 'states.json')
 scheduleCSV = os.path.join(Path.home(), 'data', 'hotWaterSchedule.csv')
 secondsInterval = 20
-boostHeatingThermostatTemp = 23
+boostHeatingThermostatTemp = 25
 
 
 def get_access_token():
