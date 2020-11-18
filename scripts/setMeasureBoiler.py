@@ -145,7 +145,7 @@ def setHotWaterHeating(recordStates):
 
     if jsonState['heating']['state']:
         setHeatingState = True
-        heatingState = setState('heating', jsonState, scheduleStates['hotWater'])
+        heatingState = setState('heating', jsonState, scheduleStates['heating'])
 
         if prevHeatingNestState != heatingState:
             with open(f'{Path.home()}/data/oauth_secret_web.json', 'r') as f:
@@ -184,6 +184,10 @@ def setHotWaterHeating(recordStates):
 
     recordStates = [setHotWaterState, prevHeatingNestState, boilerState]
     if recordStates != prevMeasuredStates:
+        #set heating state to on if boiler state is on and hot water is off
+        if boilerState and not setHotWaterState:
+            recordStates[1] = True
+
         with open(csvFile, 'a') as f:
             timeNow = datetime.now().replace(microsecond = 0).astimezone()
             f.write(f'{timeNow.isoformat()},{",".join(str(s) for s in recordStates)}\n')
