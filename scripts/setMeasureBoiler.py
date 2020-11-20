@@ -23,7 +23,7 @@ csvFile = os.path.join(Path.home(), 'data', 'boilerState.csv')
 boostJSON = os.path.join(Path.home(), 'data', 'states.json')
 scheduleCSV = os.path.join(Path.home(), 'data', 'hotWaterSchedule.csv')
 secondsInterval = 20
-boostHeatingThermostatTemp = 25
+boostHeatingThermostatTemp = 27
 
 
 def get_access_token():
@@ -192,7 +192,7 @@ def setHotWaterHeating(recordStates):
             timeNow = datetime.now().replace(microsecond = 0).astimezone()
             f.write(f'{timeNow.isoformat()},{",".join(str(s) for s in recordStates)}\n')
 
-    return recordStates
+    return [setHotWaterState, prevHeatingNestState, boilerState]
 
 
 
