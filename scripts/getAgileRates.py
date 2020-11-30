@@ -23,20 +23,22 @@ def get_consumption():
 
     #setting the period of dates to retrieve
     #including timezone details
-    period_from = datetime.combine(date.today(), datetime.min.time()).astimezone() - timedelta(days=30)
-    period_to   = datetime.now().astimezone()
+    # period_from = datetime.combine(date.today(), datetime.min.time()).astimezone() - timedelta(days=30)
+    # period_to   = datetime.now().astimezone() + timedelta(days=1)
 
     url = urljoin(baseURL, f'v1/electricity-meter-points/{MPAN}/meters/{meter_serial}/consumption/')
-    params = {'period_from':period_from.isoformat(), 'period_to':period_to.isoformat(), 'order_by':'period'}
-    while url:
+    # params = {'period_from':period_from.isoformat(), 'period_to':period_to.isoformat(), 'order_by':'period'}
+    params, i = {}, 0
+    while url and i < 20:
         resp = requests.get(url, auth=(API_KEY,''), params=params)
         if resp.status_code != 200:
             break
         
         url = resp.json()['next']
         history_list.extend(resp.json()['results'])
+        i += 1
 
-    # print(history_list)
+    # print(history_list[-1])
     return history_list
 
 
