@@ -29,7 +29,7 @@ def get_consumption():
     url = urljoin(baseURL, f'v1/electricity-meter-points/{MPAN}/meters/{meter_serial}/consumption/')
     # params = {'period_from':period_from.isoformat(), 'period_to':period_to.isoformat(), 'order_by':'period'}
     params, i = {}, 0
-    while url and i < 20:
+    while url and i < 10:
         resp = requests.get(url, auth=(API_KEY,''), params=params)
         if resp.status_code != 200:
             break
@@ -44,7 +44,8 @@ def get_consumption():
 
 def main():
     #retrieving the agile rates
-    resp = requests.get(urljoin(baseURL, f'v1/products/{product_code}/electricity-tariffs/{tariff_code}/standard-unit-rates/'))
+    resp = requests.get(urljoin(baseURL, f'v1/products/{product_code}/electricity-tariffs/{tariff_code}/standard-unit-rates/'),
+                        params={"page_size": 500})
     rates = resp.json()['results']
 
     #storing the rates into a dataframe and convert string to datetime
@@ -60,17 +61,12 @@ def main():
                 columns=['valid_from', 'valid_to', "rate"])
 
     #loading the consumption DF and storing the rates
-    df = df.rename(columns={'valid_from': 'interval_start'})
-    old_df_pckl = os.path.join(Path.home(), 'data', 'consumptionHistory.df')
-    try:
-        oldDF = pd.read_pickle(old_df_pckl)
-    except FileNotFoundError:
-        oldDF = pd.DataFrame(columns=['rate', 'interval_start', 'consumption'])
+    # df = df.rename(columns={'valid_from': 'interval_start'})
 
     #merging the new rates into existing consumption DF
-    combined_df = oldDF.merge(df, how='outer', on=['interval_start'])
-    combined_df['rate'] = combined_df['rate_x'].fillna(combined_df['rate_y'])
-    combined_df = combined_df.drop(columns=['rate_x', 'rate_y', 'valid_to'])
+    # combined_df = oldDF.merge(df, how='outer', on=['interval_start'])
+    # combined_df['rate'] = combined_df['rate_x'].fillna(combined_df['rate_y'])
+    # combined_df = combined_df.drop(columns=['rate_x', 'rate_y', 'valid_to'])
 
     consumption_history = get_consumption()
 
@@ -78,11 +74,31 @@ def main():
     conDF = pd.DataFrame(consumption_history)
     #converting string to datetime
     conDF['interval_start'] = pd.to_datetime(conDF['interval_start'], utc = True)
+    conDF['interval_end'] = pd.to_datetime(conDF['interval_end'], utc = True)
+
+    def get_rate_by_interval(row):
+        
+        rate_df = df[(row['interval_start'] >= df['valid_from']) & \
+                        (row['interval_end'] <= df['valid_to'])]
+        return rate_df.iloc[0]['rate']
+
+
+    #combining the consumption with the rates
+    conDF['rate'] = conDF.apply(get_rate_by_interval, axis=1)
+    conDF = conDF.sort_values(by='interval_start')
 
     #merging with the existing consumption DF
-    combined_df = combined_df.merge(conDF, how='outer', on=['interval_start'])
+    old_df_pckl = os.path.join(Path.home(), 'data', 'consumptionHistory.df')
+    try:
+        oldDF = pd.read_pickle(old_df_pckl)
+    except FileNotFoundError:
+        oldDF = pd.DataFrame(columns=['rate', 'interval_start', 'consumption'])
+        
+    combined_df = oldDF.merge(conDF, how='outer', on=['interval_start'])
     combined_df['consumption'] = combined_df['consumption_x'].fillna(combined_df['consumption_y'])
-    combined_df = combined_df.drop(columns=['consumption_x', 'consumption_y', 'interval_end'])
+    combined_df['rate'] = combined_df['rate_x'].fillna(combined_df['rate_y'])
+    combined_df = combined_df.drop(columns=['consumption_x', 'consumption_y', 'interval_end', "rate_x", "rate_y"])
+    # print(combined_df)
 
     #overwriting the existing DF
     combined_df.to_pickle(old_df_pckl)
