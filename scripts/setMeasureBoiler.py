@@ -1,23 +1,13 @@
-import os, sys, pathlib
-import time, csv, json
-import RPi.GPIO as GPIO
+import os, sys
+import time, json
+# import RPi.GPIO as GPIO
+from gpiozero.pins.pigpio import PiGPIOFactory
+from gpiozero import Button, LED
 from pathlib import Path
 from datetime import datetime, timedelta
 import requests
 import pandas as pd
-
-GPIO.setmode(GPIO.BCM)
-
-hotWaterPin        = 17
-heatingPin         = 18
-boilerStatePin     = 23
-
-GPIO.setup(hotWaterPin, GPIO.OUT)
-GPIO.setup(heatingPin, GPIO.OUT)
-GPIO.setup(boilerStatePin, GPIO.IN)
-#turn off pins after reboot
-GPIO.output(hotWaterPin, GPIO.HIGH)
-GPIO.output(heatingPin, GPIO.LOW)
+# import traceback
 
 csvFile = os.path.join(Path.home(), 'data', 'boilerState.csv')
 boostJSON = os.path.join(Path.home(), 'data', 'states.json')
@@ -58,25 +48,7 @@ def get_access_token():
     return access_token
 
 
-# def measureBoiler(prevMeasuredStates):
-#     #storing state of the hotWater, heating and boiler
-#     # hotWaterState = 1
-#     # heatingState  = 0
-#     # boilerState   = 1
-#     hotWaterState = not GPIO.input(hotWaterPin)
-#     heatingState  = bool(GPIO.input(heatingPin))
-#     boilerState   = not GPIO.input(boilerStatePin)
-
-#     states = [hotWaterState, heatingState, boilerState]
-#     if states != prevMeasuredStates:
-#         with open(csvFile, 'a') as f:
-#             timeNow = datetime.now().replace(microsecond = 0).astimezone()
-#             f.write(f'{timeNow.isoformat()},{",".join(str(s) for s in states)}\n')
-
-#     return states
-
-
-def setHotWaterHeating(recordStates):
+def setHotWaterHeating(recordStates, hot_water_pin, heating_pin, boiler_state_pin):
 
     prevHeatingNestState = recordStates[1]
 
@@ -169,18 +141,22 @@ def setHotWaterHeating(recordStates):
     else:
         setHeatingState = False
 
-    #read heating state
-    #setHeatingState = jsonState['heating']['state']
-
     #check if previous state is the same as current state
-    #if not, then set the state
-#    if prevWaterState != setHotWaterStat:
-    GPIO.output(hotWaterPin, not setHotWaterState)
-#    if prevHeatingState != setHeatingState:
-    GPIO.output(heatingPin, setHeatingState)
+    try:
+        if setHotWaterState:
+            hot_water_pin.off()
+        else:
+            hot_water_pin.on()
+        if setHeatingState:
+            heating_pin.on()
+        else:
+            heating_pin.off()
+    except Exception:
+        # print("ERROR", traceback.print_exc())
+        return (0, recordStates)
 
     #check and record boiler state
-    boilerState   = not GPIO.input(boilerStatePin)
+    boilerState = bool(boiler_state_pin.value)
 
     recordStates = [setHotWaterState, prevHeatingNestState, boilerState]
     if recordStates != prevMeasuredStates:
@@ -192,7 +168,8 @@ def setHotWaterHeating(recordStates):
             timeNow = datetime.now().replace(microsecond = 0).astimezone()
             f.write(f'{timeNow.isoformat()},{",".join(str(s) for s in recordStates)}\n')
 
-    return [setHotWaterState, prevHeatingNestState, boilerState]
+    # print("SET STATE", (1, [setHotWaterState, prevHeatingNestState, boilerState]))
+    return (1, [setHotWaterState, prevHeatingNestState, boilerState])
 
 
 
@@ -201,10 +178,25 @@ if __name__ == "__main__":
     prevHotWaterState = False
     prevHeatingState = False
     recordStates = [False, False, -1]
+    pin_status = 0
     try:
         while True:
-            recordStates = setHotWaterHeating(recordStates)
-            # prevMeasuredStates = measureBoiler(prevMeasuredStates)
+            if not pin_status:
+                try:
+                    remote_pin_factory = PiGPIOFactory("192.168.1.51")
+                    hot_water_pin       = LED(17, pin_factory=remote_pin_factory)
+                    heating_pin         = LED(18, pin_factory=remote_pin_factory)
+                    boiler_state_pin    = Button(23, pin_factory=remote_pin_factory)
+                except Exception:
+                    pass
+                    # print("PIN Setup error: ", traceback.print_exc())
+                else:
+                    pin_status, recordStates = setHotWaterHeating(recordStates, 
+                                                hot_water_pin, heating_pin, boiler_state_pin)
+            else:
+                pin_status, recordStates = setHotWaterHeating(recordStates, 
+                                            hot_water_pin, heating_pin, boiler_state_pin)
+
             time.sleep(secondsInterval)
     except KeyboardInterrupt:
         sys.exit()
