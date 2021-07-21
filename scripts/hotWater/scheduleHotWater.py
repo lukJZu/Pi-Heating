@@ -1,17 +1,19 @@
 import os, sys, pytz, json
-from operator import itemgetter
-from datetime import date, time, datetime, timedelta
+# from operator import itemgetter
+from datetime import datetime, timedelta
 from dateutil.tz import tzlocal
 from pathlib import Path
 import pandas as pd
 
+data_dir = "/mnt/data"
+
 #read in the csv file that contains the updated agile rates into dataframe
-ratesDF = pd.read_csv(os.path.join(Path.home(), 'data', 'agileRates.csv'))
+ratesDF = pd.read_csv(os.path.join(data_dir, 'agileRates.csv'))
 ratesDF['valid_to'] = pd.to_datetime(ratesDF['valid_to'], utc=True)
 ratesDF['valid_from'] = pd.to_datetime(ratesDF['valid_from'], utc=True)
 
 
-time_variables_json = os.path.join(Path.home(), 'data', 'time_variables.json')
+time_variables_json = os.path.join(data_dir, 'time_variables.json')
 try:
     with open(time_variables_json, 'r') as f:
         time_variables = json.load(f)
@@ -19,7 +21,7 @@ except FileNotFoundError:
     time_variables = {}
 
 #read in any existing schedule for hot water into a dataframe
-scheduleFile = os.path.join(Path.home(), 'data', 'hotWaterSchedule.csv')
+scheduleFile = os.path.join(data_dir, 'hotWaterSchedule.csv')
 # try:
 #     scheduleDF = pd.read_csv(scheduleFile, header = 0)
 # except:
@@ -35,7 +37,7 @@ scheduleDF['end_time'] = pd.to_datetime(scheduleDF['end_time'], utc=True)
 #     scheduleDF = scheduleDF.drop(scheduleDF[scheduleDF['time'].dt.date == date.today()+timedelta(days=1)].index)
 
 #get the past month avg from states.json
-with open(os.path.join(Path.home(), 'data', 'states.json'), 'r') as f:
+with open(os.path.join(data_dir, 'states.json'), 'r') as f:
     states = json.load(f)
 heatWaterMin = states['hotWater']['pastMonthAvg'] + time_variables.get('addToAverage', 10)    #how long is the typical heat up
 # heatWaterMin = 50    #how long is the typical heat up

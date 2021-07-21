@@ -5,6 +5,8 @@ import requests
 from urllib.parse import urljoin
 import pandas as pd
 
+data_dir = "/mnt/data"
+
 baseURL = "https://api.octopus.energy"
 
 #getting the octopus details
@@ -57,7 +59,7 @@ def main():
     df = df.sort_values(by='valid_from')
 
     #storing the rates to csv for hot water scheduling 
-    df.to_csv(os.path.join(Path.home(), 'data', 'agileRates.csv'), index=False,
+    df.to_csv(os.path.join(data_dir, 'agileRates.csv'), index=False,
                 columns=['valid_from', 'valid_to', "rate"])
 
     #loading the consumption DF and storing the rates
@@ -88,7 +90,7 @@ def main():
     conDF = conDF.sort_values(by='interval_start')
 
     #merging with the existing consumption DF
-    old_df_pckl = os.path.join(Path.home(), 'data', 'consumptionHistory.df')
+    old_df_pckl = os.path.join(data_dir, 'consumptionHistory.df')
     try:
         oldDF = pd.read_pickle(old_df_pckl)
     except FileNotFoundError:

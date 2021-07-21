@@ -7,24 +7,26 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import requests
 import pandas as pd
-# import traceback
+import traceback
 
-csvFile = os.path.join(Path.home(), 'data', 'boilerState.csv')
-boostJSON = os.path.join(Path.home(), 'data', 'states.json')
-scheduleCSV = os.path.join(Path.home(), 'data', 'hotWaterSchedule.csv')
-secondsInterval = 20
+data_dir = "/mnt/data"
+
+csvFile = os.path.join(data_dir, 'boilerState.csv')
+boostJSON = os.path.join(data_dir, 'states.json')
+scheduleCSV = os.path.join(data_dir, 'hotWaterSchedule.csv')
+secondsInterval = 10
 boostHeatingThermostatTemp = 27
 
 
 def get_access_token():
-    with open(os.path.join(Path.home(), 'data', 'tokens.json'), 'r') as f:
+    with open(os.path.join(data_dir, 'tokens.json'), 'r') as f:
         token_dict = json.load(f)
 
     expiry_time = datetime.fromisoformat(token_dict['expiry'])
     if expiry_time > datetime.now():
         return token_dict['access_token']
     
-    with open(os.path.join(Path.home(), 'data', 'oauth_secret_web.json'), 'r') as f:
+    with open(os.path.join(data_dir, 'oauth_secret_web.json'), 'r') as f:
         credentials = json.load(f)['web']
         
     url = "https://www.googleapis.com/oauth2/v4/token?"+\
@@ -42,7 +44,7 @@ def get_access_token():
     new_expiry = datetime.now() + timedelta(seconds=3599)
     token_dict['expiry'] = new_expiry.isoformat()
 
-    with open(os.path.join(Path.home(), 'data', 'tokens.json'), 'w') as f:
+    with open(os.path.join(data_dir, 'tokens.json'), 'w') as f:
         json.dump(token_dict, f)
     
     return access_token
@@ -152,7 +154,8 @@ def setHotWaterHeating(recordStates, hot_water_pin, heating_pin, boiler_state_pi
         else:
             heating_pin.off()
     except Exception:
-        # print("ERROR", traceback.print_exc())
+        # del hot_water_pin, heating_pin, boiler_state_pin
+        print("ERROR", traceback.print_exc())
         return (0, recordStates)
 
     #check and record boiler state
@@ -168,15 +171,48 @@ def setHotWaterHeating(recordStates, hot_water_pin, heating_pin, boiler_state_pi
             timeNow = datetime.now().replace(microsecond = 0).astimezone()
             f.write(f'{timeNow.isoformat()},{",".join(str(s) for s in recordStates)}\n')
 
-    # print("SET STATE", (1, [setHotWaterState, prevHeatingNestState, boilerState]))
+    print("SET STATE", (1, [setHotWaterState, prevHeatingNestState, boilerState]))
     return (1, [setHotWaterState, prevHeatingNestState, boilerState])
+
+
+def each_loop(pin_status, remote_pin_factory, recordStates):
+    if not pin_status:
+        try:
+            remote_pin_factory = PiGPIOFactory("192.168.1.51")
+            hot_water_pin       = LED(17, pin_factory=remote_pin_factory)
+            heating_pin         = LED(18, pin_factory=remote_pin_factory)
+            boiler_state_pin    = Button(23, pin_factory=remote_pin_factory)
+        except Exception:
+            print("PIN Setup error: ", traceback.print_exc())
+            pass
+        else:
+            pin_status, recordStates = setHotWaterHeating(recordStates, 
+                                        hot_water_pin, heating_pin, boiler_state_pin)
+    else:
+        pin_status, recordStates = setHotWaterHeating(recordStates, 
+                                    hot_water_pin, heating_pin, boiler_state_pin)
+
+    # if not pin_status:
+    #     if "remote_pin_factory" in locals():
+    #         # remote_pin_factory.close()
+    #         del remote_pin_factory
+    #     if "hot_water_pin" in locals():
+    #         # hot_water_pin.close()
+    #         del hot_water_pin
+    #     if "heating_pin" in locals():
+    #         # remote_pin_factory.close()
+    #         del heating_pin
+    #     if "boiler_state_pin" in locals():
+    #         # remote_pin_factory.close()
+    #         del boiler_state_pin
+
 
 
 
 if __name__ == "__main__":
-    prevMeasuredStates = [-1, -1, -1]
-    prevHotWaterState = False
-    prevHeatingState = False
+    # prevMeasuredStates = [-1, -1, -1]
+    # prevHotWaterState = False
+    # prevHeatingState = False
     recordStates = [False, False, -1]
     pin_status = 0
     try:
@@ -188,14 +224,28 @@ if __name__ == "__main__":
                     heating_pin         = LED(18, pin_factory=remote_pin_factory)
                     boiler_state_pin    = Button(23, pin_factory=remote_pin_factory)
                 except Exception:
+                    print("PIN Setup error: ", traceback.print_exc())
                     pass
-                    # print("PIN Setup error: ", traceback.print_exc())
                 else:
                     pin_status, recordStates = setHotWaterHeating(recordStates, 
                                                 hot_water_pin, heating_pin, boiler_state_pin)
             else:
                 pin_status, recordStates = setHotWaterHeating(recordStates, 
                                             hot_water_pin, heating_pin, boiler_state_pin)
+
+            if not pin_status:
+                if "remote_pin_factory" in locals():
+                    # remote_pin_factory.close()
+                    del remote_pin_factory
+                if "hot_water_pin" in locals():
+                    # hot_water_pin.close()
+                    del hot_water_pin
+                if "heating_pin" in locals():
+                    # remote_pin_factory.close()
+                    del heating_pin
+                if "boiler_state_pin" in locals():
+                    # remote_pin_factory.close()
+                    del boiler_state_pin
 
             time.sleep(secondsInterval)
     except KeyboardInterrupt:
