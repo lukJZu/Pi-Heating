@@ -117,6 +117,7 @@ def setHotWaterHeating(recordStates, hot_water_pin, heating_pin, boiler_state_pi
     scheduleStates = checkAgainstSchedule()
 
     setHotWaterState = setState('hotWater', jsonState, scheduleStates['hotWater'])
+    setHeatingState = False
 
 #    if jsonState['heating']['state']:
 #        setHeatingState = True
@@ -143,6 +144,7 @@ def setHotWaterHeating(recordStates, hot_water_pin, heating_pin, boiler_state_pi
 #            prevHeatingNestState = heatingState
 #    else:
 #        setHeatingState = False
+
 
     #check if previous state is the same as current state
     try:
