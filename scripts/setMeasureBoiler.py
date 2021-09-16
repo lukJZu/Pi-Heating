@@ -6,6 +6,7 @@ from gpiozero import Button, LED
 from pathlib import Path
 from datetime import datetime, timedelta
 import requests
+from concurrent.futures import ProcessPoolExecutor
 import pandas as pd
 import traceback
 
@@ -117,31 +118,31 @@ def setHotWaterHeating(recordStates, hot_water_pin, heating_pin, boiler_state_pi
 
     setHotWaterState = setState('hotWater', jsonState, scheduleStates['hotWater'])
 
-    if jsonState['heating']['state']:
-        setHeatingState = True
-        heatingState = setState('heating', jsonState, scheduleStates['heating'])
-
-        if prevHeatingNestState != heatingState:
-            with open(f'{Path.home()}/data/oauth_secret_web.json', 'r') as f:
-                json_dict = json.load(f)['web']
-            device_id = json_dict['device_id']
-            project_id = json_dict['device_access_project_ID']
-
-            access_token = get_access_token()
-            url = f"https://smartdevicemanagement.googleapis.com/v1/enterprises/{project_id}/devices/{device_id}"
-            heatTemp = boostHeatingThermostatTemp if heatingState else 17
-            setData = {
-                "command" : "sdm.devices.commands.ThermostatTemperatureSetpoint.SetHeat",
-                "params" : {
-                    "heatCelsius" : heatTemp
-                }
-            }
-            requests.post(url+':executeCommand', headers={"Content-Type": "application/json", 
-                            "Authorization": f"Bearer {access_token}"},
-                            data=json.dumps(setData))
-            prevHeatingNestState = heatingState
-    else:
-        setHeatingState = False
+#    if jsonState['heating']['state']:
+#        setHeatingState = True
+#        heatingState = setState('heating', jsonState, scheduleStates['heating'])
+#
+#        if prevHeatingNestState != heatingState:
+#            with open(f'{Path.home()}/data/oauth_secret_web.json', 'r') as f:
+#                json_dict = json.load(f)['web']
+#            device_id = json_dict['device_id']
+#            project_id = json_dict['device_access_project_ID']
+#
+#            access_token = get_access_token()
+#            url = f"https://smartdevicemanagement.googleapis.com/v1/enterprises/{project_id}/devices/{device_id}"
+#            heatTemp = boostHeatingThermostatTemp if heatingState else 17
+#            setData = {
+#                "command" : "sdm.devices.commands.ThermostatTemperatureSetpoint.SetHeat",
+#                "params" : {
+#                    "heatCelsius" : heatTemp
+#                }
+#            }
+#            requests.post(url+':executeCommand', headers={"Content-Type": "application/json", 
+#                            "Authorization": f"Bearer {access_token}"},
+#                            data=json.dumps(setData))
+#            prevHeatingNestState = heatingState
+#    else:
+#        setHeatingState = False
 
     #check if previous state is the same as current state
     try:
@@ -154,8 +155,7 @@ def setHotWaterHeating(recordStates, hot_water_pin, heating_pin, boiler_state_pi
         else:
             heating_pin.off()
     except Exception:
-        # del hot_water_pin, heating_pin, boiler_state_pin
-        print("ERROR", traceback.print_exc())
+        # print("ERROR", traceback.print_exc())
         return (0, recordStates)
 
     #check and record boiler state
@@ -171,48 +171,10 @@ def setHotWaterHeating(recordStates, hot_water_pin, heating_pin, boiler_state_pi
             timeNow = datetime.now().replace(microsecond = 0).astimezone()
             f.write(f'{timeNow.isoformat()},{",".join(str(s) for s in recordStates)}\n')
 
-    print("SET STATE", (1, [setHotWaterState, prevHeatingNestState, boilerState]))
+    # print("SET STATE", (1, [setHotWaterState, prevHeatingNestState, boilerState]))
     return (1, [setHotWaterState, prevHeatingNestState, boilerState])
 
-
-def each_loop(pin_status, remote_pin_factory, recordStates):
-    if not pin_status:
-        try:
-            remote_pin_factory = PiGPIOFactory("192.168.1.51")
-            hot_water_pin       = LED(17, pin_factory=remote_pin_factory)
-            heating_pin         = LED(18, pin_factory=remote_pin_factory)
-            boiler_state_pin    = Button(23, pin_factory=remote_pin_factory)
-        except Exception:
-            print("PIN Setup error: ", traceback.print_exc())
-            pass
-        else:
-            pin_status, recordStates = setHotWaterHeating(recordStates, 
-                                        hot_water_pin, heating_pin, boiler_state_pin)
-    else:
-        pin_status, recordStates = setHotWaterHeating(recordStates, 
-                                    hot_water_pin, heating_pin, boiler_state_pin)
-
-    # if not pin_status:
-    #     if "remote_pin_factory" in locals():
-    #         # remote_pin_factory.close()
-    #         del remote_pin_factory
-    #     if "hot_water_pin" in locals():
-    #         # hot_water_pin.close()
-    #         del hot_water_pin
-    #     if "heating_pin" in locals():
-    #         # remote_pin_factory.close()
-    #         del heating_pin
-    #     if "boiler_state_pin" in locals():
-    #         # remote_pin_factory.close()
-    #         del boiler_state_pin
-
-
-
-
-if __name__ == "__main__":
-    # prevMeasuredStates = [-1, -1, -1]
-    # prevHotWaterState = False
-    # prevHeatingState = False
+def main_loop():
     recordStates = [False, False, -1]
     pin_status = 0
     try:
@@ -224,8 +186,8 @@ if __name__ == "__main__":
                     heating_pin         = LED(18, pin_factory=remote_pin_factory)
                     boiler_state_pin    = Button(23, pin_factory=remote_pin_factory)
                 except Exception:
-                    print("PIN Setup error: ", traceback.print_exc())
-                    pass
+                    # print("PIN Setup error: ", traceback.print_exc())
+                    return 1
                 else:
                     pin_status, recordStates = setHotWaterHeating(recordStates, 
                                                 hot_water_pin, heating_pin, boiler_state_pin)
@@ -234,19 +196,31 @@ if __name__ == "__main__":
                                             hot_water_pin, heating_pin, boiler_state_pin)
 
             if not pin_status:
-                if "remote_pin_factory" in locals():
-                    # remote_pin_factory.close()
-                    del remote_pin_factory
-                if "hot_water_pin" in locals():
-                    # hot_water_pin.close()
-                    del hot_water_pin
-                if "heating_pin" in locals():
-                    # remote_pin_factory.close()
-                    del heating_pin
-                if "boiler_state_pin" in locals():
-                    # remote_pin_factory.close()
-                    del boiler_state_pin
+                return 1
 
             time.sleep(secondsInterval)
+
+    except KeyboardInterrupt:
+        return 0
+
+
+
+
+if __name__ == "__main__":
+    prevMeasuredStates = [-1, -1, -1]
+    try:
+        while True:
+            pool = ProcessPoolExecutor(1)
+
+            thread1 = pool.submit(main_loop)
+
+            resp = thread1.result()
+
+            if resp:
+                print("error detected, restarting process")
+                del thread1, pool
+                time.sleep(secondsInterval)
+            else:
+                break
     except KeyboardInterrupt:
         sys.exit()
